@@ -1,0 +1,37 @@
+import { useAppVersion } from "@/features/workspace/queries/workspace-query.ts";
+import { isCloud } from "@/lib/config.ts";
+import classes from "@/components/settings/settings.module.css";
+import { Text, Tooltip } from "@mantine/core";
+import React from "react";
+import semverGt from "semver/functions/gt";
+import { useTranslation } from "react-i18next";
+
+export default function AppVersion() {
+  const { t } = useTranslation();
+  const { data: appVersion } = useAppVersion(!isCloud());
+  let hasUpdate = false;
+  try {
+    hasUpdate =
+      appVersion &&
+      parseFloat(appVersion.latestVersion) > 0 &&
+      semverGt(appVersion.latestVersion, appVersion.currentVersion);
+  } catch (err) {
+    console.error(err);
+  }
+
+  return (
+    <div className={classes.text}>
+      <Tooltip
+        label={t("{{latestVersion}} is available", {
+          latestVersion: `v${appVersion?.latestVersion}`,
+        })}
+        disabled={!hasUpdate}
+      >
+        <Text size="sm" c="dimmed">
+          {appVersion?.currentVersion && <>v{appVersion?.currentVersion}</>}
+          {hasUpdate && ` (${t("Update available")})`}
+        </Text>
+      </Tooltip>
+    </div>
+  );
+}
