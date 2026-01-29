@@ -78,3 +78,28 @@ export async function exportSpace(data: IExportSpaceParams): Promise<void> {
 
   saveAs(req.data, decodedFileName);
 }
+
+export interface ImportConfluenceSpaceResult {
+  spaceId: string;
+  spaceName: string;
+  pageCount: number;
+}
+
+export async function importConfluenceSpace(
+  file: File,
+): Promise<ImportConfluenceSpaceResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const req = await api.post<ImportConfluenceSpaceResult>(
+    "/spaces/import-confluence",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    },
+  );
+
+  return req.data;
+}

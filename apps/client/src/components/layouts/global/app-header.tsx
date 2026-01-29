@@ -23,7 +23,10 @@ import {
   shareSearchSpotlight,
 } from "@/features/search/constants.ts";
 
-const links = [{ link: APP_ROUTE.HOME, label: "Home" }];
+const links = [
+  { link: APP_ROUTE.HOME, label: "Home" },
+  { link: "/spaces", label: "Spaces" },
+];
 
 export function AppHeader() {
   const { t } = useTranslation();

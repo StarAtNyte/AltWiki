@@ -4,6 +4,7 @@ import { Helmet } from "react-helmet-async";
 import { getAppName } from "@/lib/config";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
 import CreateSpaceModal from "@/features/space/components/create-space-modal";
+import ImportConfluenceSpaceModal from "@/features/space/components/import-confluence-space-modal";
 import { AllSpacesList } from "@/features/space/components/spaces-page";
 import { usePaginateAndSearch } from "@/hooks/use-paginate-and-search";
 import useUserRole from "@/hooks/use-user-role";
@@ -30,7 +31,12 @@ export default function Spaces() {
       <Container size={"800"} pt="xl">
         <Group justify="space-between" mb="xl">
           <Title order={3}>{t("Spaces")}</Title>
-          {isAdmin && <CreateSpaceModal />}
+          {isAdmin && (
+            <Group gap="sm">
+              <ImportConfluenceSpaceModal />
+              <CreateSpaceModal />
+            </Group>
+          )}
         </Group>
 
         <Box>

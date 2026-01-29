@@ -1,12 +1,56 @@
 import { IPage } from "@/features/page/types/page.types.ts";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 
+import { SortOrder } from "@/features/page/tree/atoms/tree-data-atom";
+
 export function sortPositionKeys(keys: any[]) {
   return keys.sort((a, b) => {
     if (a.position < b.position) return -1;
     if (a.position > b.position) return 1;
     return 0;
   });
+}
+
+function toTimestamp(date: Date | string | undefined): number {
+  if (!date) return 0;
+  if (date instanceof Date) return date.getTime();
+  return new Date(date).getTime();
+}
+
+export function sortTreeNodes(nodes: SpaceTreeNode[], sortOrder: SortOrder): SpaceTreeNode[] {
+  const sorted = [...nodes].sort((a, b) => {
+    switch (sortOrder) {
+      case "alphabetical-asc": {
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      }
+      case "alphabetical-desc": {
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
+        return nameB.localeCompare(nameA);
+      }
+      case "created-newest": {
+        return toTimestamp(b.createdAt) - toTimestamp(a.createdAt);
+      }
+      case "created-oldest": {
+        return toTimestamp(a.createdAt) - toTimestamp(b.createdAt);
+      }
+      case "modified-newest": {
+        return toTimestamp(b.updatedAt) - toTimestamp(a.updatedAt);
+      }
+      case "modified-oldest": {
+        return toTimestamp(a.updatedAt) - toTimestamp(b.updatedAt);
+      }
+      default:
+        return 0;
+    }
+  });
+
+  return sorted.map(node => ({
+    ...node,
+    children: node.children ? sortTreeNodes(node.children, sortOrder) : [],
+  }));
 }
 
 export function buildTree(pages: IPage[]): SpaceTreeNode[] {
@@ -25,6 +69,8 @@ export function buildTree(pages: IPage[]): SpaceTreeNode[] {
       spaceId: page.spaceId,
       parentPageId: page.parentPageId,
       children: [],
+      createdAt: page.createdAt,
+      updatedAt: page.updatedAt,
     };
   });
 

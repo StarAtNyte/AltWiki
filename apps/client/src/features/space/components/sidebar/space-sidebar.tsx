@@ -9,19 +9,20 @@ import {
 import {
   IconArrowDown,
   IconBrandGithub,
+  IconCheck,
   IconDots,
   IconFileExport,
   IconHome,
   IconPlus,
-  IconSearch,
   IconSettings,
   IconTemplate,
   IconTrash,
 } from "@tabler/icons-react";
 import classes from "./space-sidebar.module.css";
-import React from "react";
+import React, { useCallback } from "react";
 import { useAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
+import { selectedPageIdsAtom, sortOrderAtom, SortOrder } from "@/features/page/tree/atoms/tree-data-atom.ts";
 import { Link, useLocation, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { useDisclosure } from "@mantine/hooks";
@@ -29,6 +30,7 @@ import SpaceSettingsModal from "@/features/space/components/settings-modal.tsx";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
 import { getSpaceUrl } from "@/lib/config.ts";
 import SpaceTree from "@/features/page/tree/components/space-tree.tsx";
+import BulkActionsBar from "@/features/page/tree/components/bulk-actions-bar.tsx";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
 import {
   SpaceCaslAction,
@@ -40,13 +42,13 @@ import { SwitchSpace } from "./switch-space";
 import ExportModal from "@/components/common/export-modal";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
-import { searchSpotlight } from "@/features/search/constants";
 import { GithubDocsModal } from "@/features/github-docs";
 import { TemplatePickerModal, useCreateFromTemplate, DocTemplate } from "@/features/templates";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
   const [tree] = useAtom(treeApiAtom);
+  const [selectedPageIds, setSelectedPageIds] = useAtom(selectedPageIdsAtom);
   const location = useLocation();
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
@@ -63,6 +65,11 @@ export function SpaceSidebar() {
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+
+  const clearSelection = useCallback(() => {
+    setSelectedPageIds(new Set());
+    tree?.deselectAll();
+  }, [setSelectedPageIds, tree]);
 
   if (!space) {
     return <></>;
@@ -109,20 +116,6 @@ export function SpaceSidebar() {
                   stroke={2}
                 />
                 <span>{t("Overview")}</span>
-              </div>
-            </UnstyledButton>
-
-            <UnstyledButton
-              className={classes.menu}
-              onClick={searchSpotlight.open}
-            >
-              <div className={classes.menuItemInner}>
-                <IconSearch
-                  size={18}
-                  className={classes.menuItemIcon}
-                  stroke={2}
-                />
-                <span>{t("Search")}</span>
               </div>
             </UnstyledButton>
 
@@ -202,6 +195,17 @@ export function SpaceSidebar() {
         </div>
 
         <div className={clsx(classes.section, classes.sectionPages)}>
+          {spaceAbility.can(
+            SpaceCaslAction.Manage,
+            SpaceCaslSubject.Page,
+          ) && (
+            <BulkActionsBar
+              selectedIds={Array.from(selectedPageIds)}
+              spaceId={space.id}
+              spaceSlug={spaceSlug || ""}
+              onClearSelection={clearSelection}
+            />
+          )}
           <Group className={classes.pagesHeader} justify="space-between">
             <Text size="xs" fw={500} c="dimmed">
               {t("Pages")}
@@ -279,6 +283,11 @@ function SpaceMenu({ spaceId, onSpaceSettings }: SpaceMenuProps) {
     useDisclosure(false);
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
+  const [sortOrder, setSortOrder] = useAtom(sortOrderAtom);
+
+  const handleSortChange = (order: SortOrder) => {
+    setSortOrder(order);
+  };
 
   return (
     <>
@@ -312,6 +321,46 @@ function SpaceMenu({ spaceId, onSpaceSettings }: SpaceMenuProps) {
             leftSection={<IconFileExport size={16} />}
           >
             {t("Export space")}
+          </Menu.Item>
+
+          <Menu.Divider />
+
+          <Menu.Label>{t("Sort pages")}</Menu.Label>
+          <Menu.Item
+            rightSection={sortOrder === "alphabetical-asc" ? <IconCheck size={14} /> : null}
+            onClick={() => handleSortChange("alphabetical-asc")}
+          >
+            {t("A to Z")}
+          </Menu.Item>
+          <Menu.Item
+            rightSection={sortOrder === "alphabetical-desc" ? <IconCheck size={14} /> : null}
+            onClick={() => handleSortChange("alphabetical-desc")}
+          >
+            {t("Z to A")}
+          </Menu.Item>
+          <Menu.Item
+            rightSection={sortOrder === "created-newest" ? <IconCheck size={14} /> : null}
+            onClick={() => handleSortChange("created-newest")}
+          >
+            {t("Date created (newest)")}
+          </Menu.Item>
+          <Menu.Item
+            rightSection={sortOrder === "created-oldest" ? <IconCheck size={14} /> : null}
+            onClick={() => handleSortChange("created-oldest")}
+          >
+            {t("Date created (oldest)")}
+          </Menu.Item>
+          <Menu.Item
+            rightSection={sortOrder === "modified-newest" ? <IconCheck size={14} /> : null}
+            onClick={() => handleSortChange("modified-newest")}
+          >
+            {t("Date modified (newest)")}
+          </Menu.Item>
+          <Menu.Item
+            rightSection={sortOrder === "modified-oldest" ? <IconCheck size={14} /> : null}
+            onClick={() => handleSortChange("modified-oldest")}
+          >
+            {t("Date modified (oldest)")}
           </Menu.Item>
 
           <Menu.Divider />

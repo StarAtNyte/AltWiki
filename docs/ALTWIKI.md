@@ -25,11 +25,8 @@ Pre-built page templates for common documentation types. Instead of starting fro
 - Visual Effect documentation
 - Image Processor specs
 - 3D Visualization guides
-- AI/ML model documentation
-- Hardware integration docs
-- Design tool references
 
-Templates are accessible from the sidebar when creating new pages.
+Templates are accessible from the sidebar via "New from Template".
 
 ### GitHub Repository to Documentation
 
@@ -40,11 +37,42 @@ Generate documentation automatically from a GitHub repository. This feature:
 3. Uses AI (Gemini) to generate documentation
 4. Creates pages in the wiki automatically
 
-Useful for onboarding new developers or maintaining up-to-date project documentation.
+Accessible from the sidebar via "Generate from GitHub". Useful for onboarding new developers or maintaining up-to-date project documentation.
 
 ### Confluence Import
 
-Import existing documentation from Confluence. This allows teams migrating from Confluence to bring their content over without manual copy-pasting.
+Import existing documentation from Confluence as a new space. This feature:
+
+- Parses Confluence Space Export ZIP files (entities.xml format)
+- Preserves page hierarchy and parent-child relationships
+- Converts Confluence Storage Format to standard HTML
+- Imports attachments (images, files)
+- Resolves internal page links and attachment references
+
+Access via "Import Confluence" button on the Spaces page (admin only).
+
+### Page Sorting
+
+Sort pages in the sidebar by various criteria:
+
+- Alphabetical (A to Z, Z to A)
+- Date created (newest/oldest first)
+- Date modified (newest/oldest first)
+
+Access via the space menu (three dots icon) in the sidebar under "Sort pages".
+
+### Bulk Page Operations
+
+Select multiple pages in the sidebar tree and perform bulk actions:
+
+- Move multiple pages to a different location
+- Delete multiple pages at once
+
+Hold Ctrl/Cmd to select multiple pages, then use the bulk actions bar.
+
+### Navigation Improvements
+
+- Added "Spaces" link in the header navbar for quick access to all spaces
 
 ## Installation
 
@@ -122,7 +150,10 @@ This fork tracks the main Docmost repository but includes additional features. K
 
 1. **Template system** - `apps/client/src/features/templates/`
 2. **GitHub docs integration** - `apps/server/src/integrations/github-docs/`
-3. **Confluence import** - Import functionality for Confluence exports
+3. **Confluence import** - `apps/server/src/integrations/import/services/confluence-import.service.ts`
+4. **Page sorting** - `apps/client/src/features/page/tree/atoms/tree-data-atom.ts`
+5. **Bulk page operations** - `apps/client/src/features/page/tree/components/bulk-actions-bar.tsx`
+6. **Header navigation** - `apps/client/src/components/layouts/global/app-header.tsx`
 
 ## Contributing
 

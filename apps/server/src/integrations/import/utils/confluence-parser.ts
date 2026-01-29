@@ -18,9 +18,18 @@ export interface ConfluencePage {
   attachments: ConfluenceAttachment[];
 }
 
+export interface ConfluenceSpaceInfo {
+  id: string;
+  name: string;
+  key: string;
+  homePageId: string | null;
+  description?: string;
+}
+
 export interface ConfluenceParseResult {
   pages: Map<string, ConfluencePage>;
   titleToPageId: Map<string, string>;
+  spaceInfo: ConfluenceSpaceInfo | null;
 }
 
 const logger = new Logger('ConfluenceParser');
@@ -48,6 +57,7 @@ export async function parseConfluenceExport(
 
   const pages = new Map<string, ConfluencePage>();
   const titleToPageId = new Map<string, string>();
+  let spaceInfo: ConfluenceSpaceInfo | null = null;
 
   // Map from attachment ID to attachment metadata
   const attachmentMap = new Map<
@@ -58,6 +68,26 @@ export async function parseConfluenceExport(
   // Map from BodyContent ID to body content (HTML)
   // BodyContent objects are stored separately from Page objects
   const bodyContentMap = new Map<string, string>();
+
+  // Parse Space object to get space info
+  $('object[class="Space"]').each((_, el) => {
+    const $obj = $(el);
+    const id = getPropertyValue($, $obj, 'id');
+    const name = getPropertyValue($, $obj, 'name');
+    const key = getPropertyValue($, $obj, 'key');
+    const homePageId = getIdPropertyValue($, $obj, 'homePage');
+
+    if (id && name) {
+      spaceInfo = {
+        id,
+        name,
+        key: key || '',
+        homePageId,
+      };
+    }
+  });
+
+  logger.debug(`Found Confluence space: ${spaceInfo?.name} (${spaceInfo?.key})`);
 
   // First pass: collect all BodyContent objects
   // These are stored separately and referenced by ID from Page objects
@@ -106,6 +136,12 @@ export async function parseConfluenceExport(
 
     // Skip non-current pages (drafts, historical versions, etc.)
     if (contentStatus && contentStatus !== 'current') {
+      return;
+    }
+
+    // Skip historical versions - they have an originalVersion property
+    const originalVersion = getIdPropertyValue($, $obj, 'originalVersion');
+    if (originalVersion) {
       return;
     }
 
@@ -174,7 +210,7 @@ export async function parseConfluenceExport(
     `Parsed ${pages.size} pages and ${attachmentMap.size} attachments from Confluence export`,
   );
 
-  return { pages, titleToPageId };
+  return { pages, titleToPageId, spaceInfo };
 }
 
 /**

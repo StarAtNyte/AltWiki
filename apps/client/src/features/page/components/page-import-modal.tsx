@@ -350,11 +350,11 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
       <Group justify="center" gap="xl" mih={150}>
         <div>
           <Text ta="center" size="lg" inline>
-            Import zip file
+            Import file
           </Text>
           <Text ta="center" size="sm" c="dimmed" inline py="sm">
             {t(
-              `Upload zip file containing Markdown and HTML files. Max: {{sizeLimit}}`,
+              `Upload ZIP, Markdown, or PDF file. Max: {{sizeLimit}}`,
               {
                 sizeLimit: formatBytes(getFileImportSizeLimit()),
               },
@@ -362,7 +362,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
           </Text>
           <FileButton
             onChange={(file) => handleZipUpload(file, "generic")}
-            accept="application/zip"
+            accept="application/zip,.md,.pdf,application/pdf"
             resetRef={zipFileRef}
           >
             {(props) => (

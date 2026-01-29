@@ -189,3 +189,58 @@ export async function uploadFile(
 
   return req as unknown as IAttachment;
 }
+
+// Bulk Operations
+export interface BulkOperationResult {
+  success: number;
+  failed: number;
+}
+
+export interface BulkDuplicateResult extends BulkOperationResult {
+  duplicatedPages: IPage[];
+}
+
+export async function bulkDeletePages(
+  pageIds: string[],
+  permanentlyDelete = false,
+): Promise<BulkOperationResult> {
+  const req = await api.post<BulkOperationResult>("/pages/bulk/delete", {
+    pageIds,
+    permanentlyDelete,
+  });
+  return req.data;
+}
+
+export async function bulkMovePages(
+  pageIds: string[],
+  parentPageId?: string,
+  spaceId?: string,
+): Promise<BulkOperationResult> {
+  const req = await api.post<BulkOperationResult>("/pages/bulk/move", {
+    pageIds,
+    parentPageId,
+    spaceId,
+  });
+  return req.data;
+}
+
+export async function bulkRestorePages(
+  pageIds: string[],
+): Promise<BulkOperationResult> {
+  const req = await api.post<BulkOperationResult>("/pages/bulk/restore", {
+    pageIds,
+  });
+  return req.data;
+}
+
+export async function bulkDuplicatePages(
+  pageIds: string[],
+  spaceId?: string,
+): Promise<BulkDuplicateResult> {
+  const req = await api.post<BulkDuplicateResult>("/pages/bulk/duplicate", {
+    pageIds,
+    spaceId,
+  });
+  return req.data;
+}
+

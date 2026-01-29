@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { MultipartFile } from '@fastify/multipart';
 import { sanitize } from 'sanitize-filename-ts';
@@ -20,6 +20,7 @@ import { TiptapTransformer } from '@hocuspocus/transformer';
 import * as Y from 'yjs';
 import { markdownToHtml } from '@docmost/editor-ext';
 import {
+  extractZip,
   FileTaskStatus,
   FileTaskType,
   getFileTaskFolderPath,
@@ -29,6 +30,11 @@ import { StorageService } from '../../storage/storage.service';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { QueueJob, QueueName } from '../../queue/constants';
+import { ConfluenceImportService } from './confluence-import.service';
+import { User } from '@docmost/db/types/entity.types';
+import * as tmp from 'tmp-promise';
+import { pipeline } from 'node:stream/promises';
+import { createWriteStream } from 'node:fs';
 
 @Injectable()
 export class ImportService {
@@ -40,7 +46,9 @@ export class ImportService {
     @InjectKysely() private readonly db: KyselyDB,
     @InjectQueue(QueueName.FILE_TASK_QUEUE)
     private readonly fileTaskQueue: Queue,
-  ) {}
+    @Inject(forwardRef(() => ConfluenceImportService))
+    private readonly confluenceImportService: ConfluenceImportService,
+  ) { }
 
   async importPage(
     filePromise: Promise<MultipartFile>,
@@ -237,7 +245,7 @@ export class ImportService {
         fileName: fileNameWithExt,
         filePath: filePath,
         fileSize: fileSize,
-        fileExt: 'zip',
+        fileExt: fileExtension.slice(1), // Remove the leading dot
         creatorId: userId,
         spaceId: spaceId,
         workspaceId: workspaceId,
@@ -250,5 +258,46 @@ export class ImportService {
     });
 
     return fileTask;
+  }
+
+  async importConfluenceSpace(
+    filePromise: Promise<MultipartFile>,
+    user: User,
+    workspaceId: string,
+  ): Promise<{ spaceId: string; spaceName: string; pageCount: number }> {
+    const file = await filePromise;
+
+    const { path: tmpFilePath, cleanup: cleanupTmpFile } = await tmp.file({
+      prefix: 'docmost-confluence-',
+      postfix: '.zip',
+      discardDescriptor: true,
+    });
+
+    const { path: tmpExtractDir, cleanup: cleanupTmpDir } = await tmp.dir({
+      prefix: 'docmost-confluence-extract-',
+      unsafeCleanup: true,
+    });
+
+    try {
+      // Save uploaded file to temp location
+      await pipeline(file.file, createWriteStream(tmpFilePath));
+
+      // Extract the ZIP
+      await extractZip(tmpFilePath, tmpExtractDir);
+
+      // Process the Confluence space import
+      const result =
+        await this.confluenceImportService.processConfluenceSpaceImport({
+          extractDir: tmpExtractDir,
+          user,
+          workspaceId,
+        });
+
+      return result;
+    } finally {
+      // Cleanup temp files
+      await cleanupTmpFile();
+      await cleanupTmpDir();
+    }
   }
 }

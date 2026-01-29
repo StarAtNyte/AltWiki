@@ -21,6 +21,12 @@ import {
   getAllSidebarPages,
   getDeletedPages,
   restorePage,
+  bulkDeletePages,
+  bulkRestorePages,
+  bulkMovePages,
+  bulkDuplicatePages,
+  BulkOperationResult,
+  BulkDuplicateResult,
 } from "@/features/page/services/page-service";
 import {
   IMovePage,
@@ -605,5 +611,184 @@ export function invalidateOnDeletePage(pageId: string) {
   //update recent changes
   queryClient.invalidateQueries({
     queryKey: ["recent-changes"],
+  });
+}
+
+// Bulk operation mutations
+
+export function useBulkDeletePagesMutation() {
+  const { t } = useTranslation();
+  const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const emit = useQueryEmit();
+
+  return useMutation<
+    BulkOperationResult,
+    Error,
+    { pageIds: string[]; permanentlyDelete?: boolean; spaceId?: string }
+  >({
+    mutationFn: ({ pageIds, permanentlyDelete }) =>
+      bulkDeletePages(pageIds, permanentlyDelete),
+    onSuccess: (result, { pageIds, permanentlyDelete, spaceId }) => {
+      if (permanentlyDelete) {
+        notifications.show({
+          message: t("{{count}} pages permanently deleted", {
+            count: result.success,
+          }),
+        });
+      } else {
+        notifications.show({
+          message: t("{{count}} pages moved to trash", { count: result.success }),
+        });
+
+        // Remove pages from tree
+        const treeApi = new SimpleTree<SpaceTreeNode>(treeData);
+        pageIds.forEach((pageId) => {
+          const node = treeApi.find(pageId);
+          if (node) {
+            const nodeData = node.data;
+            treeApi.drop({ id: pageId });
+            emit({
+              operation: "deleteTreeNode",
+              spaceId: nodeData.spaceId,
+              payload: { node: nodeData },
+            });
+          }
+        });
+        setTreeData(treeApi.data);
+      }
+
+      // Invalidate trash list
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          ["trash-list"].includes(item.queryKey[0] as string),
+      });
+
+      // Invalidate pages
+      pageIds.forEach((pageId) => {
+        invalidateOnDeletePage(pageId);
+      });
+    },
+    onError: () => {
+      notifications.show({
+        message: t("Failed to delete pages"),
+        color: "red",
+      });
+    },
+  });
+}
+
+export function useBulkRestorePagesMutation() {
+  const { t } = useTranslation();
+  const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const emit = useQueryEmit();
+
+  return useMutation<BulkOperationResult, Error, { pageIds: string[]; spaceId?: string }>({
+    mutationFn: ({ pageIds }) => bulkRestorePages(pageIds),
+    onSuccess: async (result, { spaceId }) => {
+      notifications.show({
+        message: t("{{count}} pages restored", { count: result.success }),
+      });
+
+      // Invalidate trash list
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          ["trash-list"].includes(item.queryKey[0] as string),
+      });
+
+      // Invalidate sidebar to refresh tree
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          ["root-sidebar-pages", "sidebar-pages"].includes(
+            item.queryKey[0] as string,
+          ),
+      });
+    },
+    onError: () => {
+      notifications.show({
+        message: t("Failed to restore pages"),
+        color: "red",
+      });
+    },
+  });
+}
+
+export function useBulkMovePagesMutation() {
+  const { t } = useTranslation();
+  const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const emit = useQueryEmit();
+
+  return useMutation<
+    BulkOperationResult,
+    Error,
+    { pageIds: string[]; parentPageId?: string; spaceId?: string }
+  >({
+    mutationFn: ({ pageIds, parentPageId, spaceId }) =>
+      bulkMovePages(pageIds, parentPageId, spaceId),
+    onSuccess: (result, { pageIds }) => {
+      notifications.show({
+        message: t("{{count}} pages moved", { count: result.success }),
+      });
+
+      // Remove pages from tree (they're moving to a different space)
+      const treeApi = new SimpleTree<SpaceTreeNode>(treeData);
+      pageIds.forEach((pageId) => {
+        const node = treeApi.find(pageId);
+        if (node) {
+          const nodeData = node.data;
+          treeApi.drop({ id: pageId });
+          emit({
+            operation: "deleteTreeNode",
+            spaceId: nodeData.spaceId,
+            payload: { node: nodeData },
+          });
+        }
+      });
+      setTreeData(treeApi.data);
+
+      // Invalidate sidebar to refresh tree
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          ["root-sidebar-pages", "sidebar-pages"].includes(
+            item.queryKey[0] as string,
+          ),
+      });
+    },
+    onError: () => {
+      notifications.show({
+        message: t("Failed to move pages"),
+        color: "red",
+      });
+    },
+  });
+}
+
+export function useBulkDuplicatePagesMutation() {
+  const { t } = useTranslation();
+
+  return useMutation<
+    BulkDuplicateResult,
+    Error,
+    { pageIds: string[]; spaceId?: string }
+  >({
+    mutationFn: ({ pageIds, spaceId }) => bulkDuplicatePages(pageIds, spaceId),
+    onSuccess: (result) => {
+      notifications.show({
+        message: t("{{count}} pages duplicated", { count: result.success }),
+      });
+
+      // Invalidate sidebar to refresh tree
+      queryClient.invalidateQueries({
+        predicate: (item) =>
+          ["root-sidebar-pages", "sidebar-pages"].includes(
+            item.queryKey[0] as string,
+          ),
+      });
+    },
+    onError: () => {
+      notifications.show({
+        message: t("Failed to duplicate pages"),
+        color: "red",
+      });
+    },
   });
 }

@@ -12,7 +12,7 @@ export async function buildAttachmentCandidates(
       if (ent.isDirectory()) {
         await walk(abs);
       } else {
-        if (['.md', '.html'].includes(path.extname(ent.name).toLowerCase())) {
+        if (['.md', '.html', '.pdf'].includes(path.extname(ent.name).toLowerCase())) {
           continue;
         }
 
@@ -48,7 +48,7 @@ export function resolveRelativeAttachmentPath(
   return null;
 }
 
-export async function collectMarkdownAndHtmlFiles(
+export async function collectImportableFiles(
   dir: string,
 ): Promise<string[]> {
   const results: string[] = [];
@@ -60,7 +60,7 @@ export async function collectMarkdownAndHtmlFiles(
       if (ent.isDirectory()) {
         await walk(fullPath);
       } else if (
-        ['.md', '.html'].includes(path.extname(ent.name).toLowerCase())
+        ['.md', '.html', '.pdf'].includes(path.extname(ent.name).toLowerCase())
       ) {
         results.push(fullPath);
       }
@@ -70,6 +70,9 @@ export async function collectMarkdownAndHtmlFiles(
   await walk(dir);
   return results;
 }
+
+// Keep the old function name for backwards compatibility
+export const collectMarkdownAndHtmlFiles = collectImportableFiles;
 
 export function stripNotionID(fileName: string): string {
   // Handle optional separator (space or dash) + 32 alphanumeric chars at end

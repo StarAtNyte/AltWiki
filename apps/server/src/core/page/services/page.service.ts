@@ -61,7 +61,7 @@ export class PageService {
     @InjectQueue(QueueName.ATTACHMENT_QUEUE) private attachmentQueue: Queue,
     @InjectQueue(QueueName.AI_QUEUE) private aiQueue: Queue,
     private eventEmitter: EventEmitter2,
-  ) {}
+  ) { }
 
   async findById(
     pageId: string,
@@ -682,5 +682,128 @@ export class PageService {
     workspaceId: string,
   ): Promise<void> {
     await this.pageRepo.removePage(pageId, userId, workspaceId);
+  }
+
+  async bulkDelete(
+    pageIds: string[],
+    permanentlyDelete: boolean,
+    userId: string,
+    workspaceId: string,
+  ): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const pageId of pageIds) {
+      try {
+        if (permanentlyDelete) {
+          await this.forceDelete(pageId, workspaceId);
+        } else {
+          await this.removePage(pageId, userId, workspaceId);
+        }
+        success++;
+      } catch (error) {
+        this.logger.error(`Failed to delete page ${pageId}:`, error);
+        failed++;
+      }
+    }
+
+    return { success, failed };
+  }
+
+  async bulkMove(
+    pageIds: string[],
+    parentPageId: string | undefined,
+    spaceId: string | undefined,
+  ): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const pageId of pageIds) {
+      try {
+        const page = await this.pageRepo.findById(pageId);
+        if (!page) {
+          failed++;
+          continue;
+        }
+
+        if (spaceId && spaceId !== page.spaceId) {
+          // Move to different space
+          await this.movePageToSpace(page, spaceId);
+        } else if (parentPageId !== undefined) {
+          // Move within same space
+          const position = await this.nextPagePosition(
+            page.spaceId,
+            parentPageId || undefined,
+          );
+          await this.movePage(
+            {
+              pageId,
+              parentPageId: parentPageId || null,
+              position,
+            },
+            page,
+          );
+        }
+        success++;
+      } catch (error) {
+        this.logger.error(`Failed to move page ${pageId}:`, error);
+        failed++;
+      }
+    }
+
+    return { success, failed };
+  }
+
+  async bulkRestore(
+    pageIds: string[],
+    workspaceId: string,
+  ): Promise<{ success: number; failed: number }> {
+    let success = 0;
+    let failed = 0;
+
+    for (const pageId of pageIds) {
+      try {
+        await this.pageRepo.restorePage(pageId, workspaceId);
+        success++;
+      } catch (error) {
+        this.logger.error(`Failed to restore page ${pageId}:`, error);
+        failed++;
+      }
+    }
+
+    return { success, failed };
+  }
+
+  async bulkDuplicate(
+    pageIds: string[],
+    targetSpaceId: string | undefined,
+    authUser: User,
+  ): Promise<{ success: number; failed: number; duplicatedPages: Page[] }> {
+    let success = 0;
+    let failed = 0;
+    const duplicatedPages: Page[] = [];
+
+    for (const pageId of pageIds) {
+      try {
+        const page = await this.pageRepo.findById(pageId);
+        if (!page) {
+          failed++;
+          continue;
+        }
+
+        const duplicated = await this.duplicatePage(
+          page,
+          targetSpaceId,
+          authUser,
+        );
+        duplicatedPages.push(duplicated);
+        success++;
+      } catch (error) {
+        this.logger.error(`Failed to duplicate page ${pageId}:`, error);
+        failed++;
+      }
+    }
+
+    return { success, failed, duplicatedPages };
   }
 }

@@ -38,7 +38,7 @@ export const useQuerySubscription = () => {
           });
           break;
         case "addTreeNode":
-          invalidateOnCreatePage(data.payload.data);
+          invalidateOnCreatePage(data.payload.data as Partial<IPage>);
           break;
         case "moveTreeNode":
           updateCacheOnMovePage(

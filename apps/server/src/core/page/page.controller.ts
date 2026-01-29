@@ -44,7 +44,7 @@ export class PageController {
     private readonly pageRepo: PageRepo,
     private readonly pageHistoryService: PageHistoryService,
     private readonly spaceAbility: SpaceAbilityFactory,
-  ) {}
+  ) { }
 
   @HttpCode(HttpStatus.OK)
   @Post('/info')
@@ -388,5 +388,158 @@ export class PageController {
       throw new ForbiddenException();
     }
     return this.pageService.getPageBreadCrumbs(page.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/delete')
+  async bulkDelete(
+    @Body() dto: import('./dto/bulk-page.dto').BulkDeletePagesDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    // Verify permissions for all pages
+    const pages = await Promise.all(
+      dto.pageIds.map((id) => this.pageRepo.findById(id)),
+    );
+
+    for (const page of pages) {
+      if (!page) continue;
+
+      const ability = await this.spaceAbility.createForUser(
+        user,
+        page.spaceId,
+      );
+
+      if (dto.permanentlyDelete) {
+        if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+          throw new ForbiddenException(
+            'Only space admins can permanently delete pages',
+          );
+        }
+      } else {
+        if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
+          throw new ForbiddenException();
+        }
+      }
+    }
+
+    return this.pageService.bulkDelete(
+      dto.pageIds,
+      dto.permanentlyDelete || false,
+      user.id,
+      workspace.id,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/move')
+  async bulkMove(
+    @Body() dto: import('./dto/bulk-page.dto').BulkMovePagesDto,
+    @AuthUser() user: User,
+  ) {
+    // Verify permissions for all pages
+    const pages = await Promise.all(
+      dto.pageIds.map((id) => this.pageRepo.findById(id)),
+    );
+
+    for (const page of pages) {
+      if (!page) continue;
+
+      const ability = await this.spaceAbility.createForUser(
+        user,
+        page.spaceId,
+      );
+
+      if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+        throw new ForbiddenException();
+      }
+
+      // If moving to different space, check target space permissions
+      if (dto.spaceId && dto.spaceId !== page.spaceId) {
+        const targetAbility = await this.spaceAbility.createForUser(
+          user,
+          dto.spaceId,
+        );
+        if (
+          targetAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)
+        ) {
+          throw new ForbiddenException();
+        }
+      }
+    }
+
+    return this.pageService.bulkMove(
+      dto.pageIds,
+      dto.parentPageId,
+      dto.spaceId,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/restore')
+  async bulkRestore(
+    @Body() dto: import('./dto/bulk-page.dto').BulkRestorePagesDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    // Verify permissions for all pages
+    const pages = await Promise.all(
+      dto.pageIds.map((id) => this.pageRepo.findById(id)),
+    );
+
+    for (const page of pages) {
+      if (!page) continue;
+
+      const ability = await this.spaceAbility.createForUser(
+        user,
+        page.spaceId,
+      );
+
+      if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Page)) {
+        throw new ForbiddenException();
+      }
+    }
+
+    return this.pageService.bulkRestore(dto.pageIds, workspace.id);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/duplicate')
+  async bulkDuplicate(
+    @Body() dto: import('./dto/bulk-page.dto').BulkDuplicatePagesDto,
+    @AuthUser() user: User,
+  ) {
+    // Verify permissions for all pages
+    const pages = await Promise.all(
+      dto.pageIds.map((id) => this.pageRepo.findById(id)),
+    );
+
+    for (const page of pages) {
+      if (!page) continue;
+
+      const ability = await this.spaceAbility.createForUser(
+        user,
+        page.spaceId,
+      );
+
+      if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+        throw new ForbiddenException();
+      }
+
+      // If duplicating to different space, check target space permissions
+      if (dto.spaceId && dto.spaceId !== page.spaceId) {
+        const targetAbility = await this.spaceAbility.createForUser(
+          user,
+          dto.spaceId,
+        );
+        if (
+          targetAbility.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)
+        ) {
+          throw new ForbiddenException();
+        }
+      }
+    }
+
+    return this.pageService.bulkDuplicate(dto.pageIds, dto.spaceId, user);
   }
 }
