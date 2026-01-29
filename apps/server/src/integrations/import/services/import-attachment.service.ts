@@ -7,7 +7,11 @@ import { StorageService } from '../../storage/storage.service';
 import { createReadStream } from 'node:fs';
 import { promises as fs } from 'fs';
 import { Readable } from 'stream';
-import { getMimeType, sanitizeFileName } from '../../../common/helpers';
+import {
+  getMimeType,
+  sanitizeFileName,
+  getExtensionFromMimeType,
+} from '../../../common/helpers';
 import { v7 } from 'uuid';
 import { FileTask } from '@docmost/db/types/entity.types';
 import { getAttachmentFolderPath } from '../../../core/attachment/attachment.utils';
@@ -107,6 +111,15 @@ export class ImportAttachmentService {
       }
     >();
 
+    // Build a lookup map from href to mimeType from pageAttachments
+    // This is used to derive file extensions for files without extensions (common in Confluence)
+    const mimeTypeByHref = new Map<string, string>();
+    for (const att of pageAttachments) {
+      if (att.mimeType && att.mimeType !== 'application/octet-stream') {
+        mimeTypeByHref.set(att.href, att.mimeType);
+      }
+    }
+
     //this.logger.debug(`Found ${drawioPairs.size} Draw.io pairs to process`);
 
     // Process Draw.io pairs and create combined SVG files
@@ -192,10 +205,17 @@ export class ImportAttachmentService {
     const uploadOnce = (relPath: string) => {
       const abs = attachmentCandidates.get(relPath)!;
       const attachmentId = v7();
-      const ext = path.extname(abs);
+      let ext = path.extname(abs);
+
+      // If file has no extension, try to derive it from the MIME type (common for Confluence attachments)
+      if (!ext && mimeTypeByHref.has(relPath)) {
+        const mimeType = mimeTypeByHref.get(relPath)!;
+        ext = getExtensionFromMimeType(mimeType);
+      }
 
       const fileNameWithExt =
-        sanitizeFileName(path.basename(abs, ext)) + ext.toLowerCase();
+        sanitizeFileName(path.basename(abs, path.extname(abs))) +
+        ext.toLowerCase();
 
       const storageFilePath = `${getAttachmentFolderPath(
         AttachmentType.File,
@@ -214,6 +234,7 @@ export class ImportAttachmentService {
           pageId,
           fileTask,
           uploadStats,
+          mimeType: mimeTypeByHref.get(relPath),
         }),
       );
 
@@ -787,6 +808,7 @@ export class ImportAttachmentService {
       failed: number;
       failedFiles: string[];
     };
+    mimeType?: string;
   }): Promise<void> {
     const {
       abs,
@@ -797,6 +819,7 @@ export class ImportAttachmentService {
       pageId,
       fileTask,
       uploadStats,
+      mimeType,
     } = opts;
 
     let lastError: Error;
@@ -817,7 +840,7 @@ export class ImportAttachmentService {
             filePath: storageFilePath,
             fileName: fileNameWithExt,
             fileSize: stat.size,
-            mimeType: getMimeType(fileNameWithExt),
+            mimeType: mimeType || getMimeType(fileNameWithExt),
             type: 'file',
             fileExt: ext,
             creatorId: fileTask.creatorId,

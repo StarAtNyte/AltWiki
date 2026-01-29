@@ -514,11 +514,11 @@ export function resolveConfluenceLinks(
     const href = $a.attr('href') || '';
     const fileName = href.replace('confluence-attachment:', '');
 
-    // Try to find attachment path
+    // Try to find attachment path (key is fileName, value is the actual path/href)
     let resolvedPath: string | null = null;
     for (const [key, value] of attachmentPathMap.entries()) {
       if (key.endsWith(`/${fileName}`) || key === fileName) {
-        resolvedPath = key;
+        resolvedPath = value;
         break;
       }
     }
@@ -534,11 +534,11 @@ export function resolveConfluenceLinks(
     const src = $img.attr('src') || '';
     const fileName = src.replace('confluence-attachment:', '');
 
-    // Try to find attachment path
+    // Try to find attachment path (key is fileName, value is the actual path/href)
     let resolvedPath: string | null = null;
     for (const [key, value] of attachmentPathMap.entries()) {
       if (key.endsWith(`/${fileName}`) || key === fileName) {
-        resolvedPath = key;
+        resolvedPath = value;
         break;
       }
     }

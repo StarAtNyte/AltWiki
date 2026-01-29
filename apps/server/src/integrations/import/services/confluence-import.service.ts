@@ -28,6 +28,8 @@ import {
   convertConfluenceContent,
   resolveConfluenceLinks,
 } from '../utils/confluence-formatter';
+import { SpaceRole, UserRole } from '../../../common/helpers/types/permission';
+import { SpaceMemberService } from '../../../core/space/services/space-member.service';
 
 interface AttachmentInfo {
   href: string;
@@ -44,6 +46,7 @@ export class ConfluenceImportService {
     private readonly importService: ImportService,
     private readonly pageService: PageService,
     private readonly spaceService: SpaceService,
+    private readonly spaceMemberService: SpaceMemberService,
     private readonly backlinkRepo: BacklinkRepo,
     @InjectKysely() private readonly db: KyselyDB,
     private readonly importAttachmentService: ImportAttachmentService,
@@ -402,16 +405,20 @@ export class ConfluenceImportService {
     }
 
     // Step 2: Create a new Docmost space
-    const spaceSlug = this.generateSpaceSlug(spaceInfo.key || spaceInfo.name);
+    const baseSlug = this.generateSpaceSlug(spaceInfo.key || spaceInfo.name);
+    const uniqueSlug = await this.generateUniqueSpaceSlug(baseSlug, workspaceId);
     const space = await this.spaceService.createSpace(user, workspaceId, {
       name: spaceInfo.name,
-      slug: spaceSlug,
+      slug: uniqueSlug,
       description: spaceInfo.description,
     });
 
     this.logger.log(
       `Created space "${space.name}" (${space.slug}) for Confluence import`,
     );
+
+    // Step 2b: Add workspace owners and admins to the space
+    await this.addWorkspaceOwnersToSpace(space.id, user.id, workspaceId);
 
     // Step 3: Build attachment candidates
     const attachmentCandidates =
@@ -738,5 +745,92 @@ export class ConfluenceImportService {
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .substring(0, 50) || 'imported-space';
+  }
+
+  /**
+   * Generate a unique space slug by appending a number suffix if needed.
+   * If 'my-space' exists, tries 'my-space-1', 'my-space-2', etc.
+   */
+  private async generateUniqueSpaceSlug(
+    baseSlug: string,
+    workspaceId: string,
+  ): Promise<string> {
+    let slug = baseSlug;
+    let suffix = 0;
+    const maxAttempts = 100;
+
+    while (suffix < maxAttempts) {
+      const exists = await this.slugExists(slug, workspaceId);
+      if (!exists) {
+        return slug;
+      }
+      suffix++;
+      slug = `${baseSlug}-${suffix}`;
+    }
+
+    // Fallback: append timestamp if all numbered suffixes are taken
+    return `${baseSlug}-${Date.now()}`;
+  }
+
+  /**
+   * Check if a space slug exists in the workspace
+   */
+  private async slugExists(
+    slug: string,
+    workspaceId: string,
+  ): Promise<boolean> {
+    const { count } = await this.db
+      .selectFrom('spaces')
+      .select((eb) => eb.fn.count('id').as('count'))
+      .where('workspaceId', '=', workspaceId)
+      .where((eb) =>
+        eb(eb.fn('lower', ['slug']), '=', slug.toLowerCase()),
+      )
+      .executeTakeFirst();
+
+    return Number(count) > 0;
+  }
+
+  /**
+   * Add all workspace owners and admins to a space as space admins.
+   * This ensures workspace administrators can see and manage imported spaces.
+   */
+  private async addWorkspaceOwnersToSpace(
+    spaceId: string,
+    creatorId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    // Get all workspace owners and admins (excluding the creator who is already added)
+    const workspaceAdmins = await this.db
+      .selectFrom('users')
+      .select(['id'])
+      .where('workspaceId', '=', workspaceId)
+      .where('role', 'in', [UserRole.OWNER, UserRole.ADMIN])
+      .where('id', '!=', creatorId)
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    // Add each admin to the space
+    for (const admin of workspaceAdmins) {
+      try {
+        await this.spaceMemberService.addUserToSpace(
+          admin.id,
+          spaceId,
+          SpaceRole.ADMIN,
+          workspaceId,
+        );
+      } catch (error) {
+        // Ignore if user is already a member (shouldn't happen but be safe)
+        this.logger.debug(
+          `Could not add workspace admin ${admin.id} to space: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    if (workspaceAdmins.length > 0) {
+      this.logger.debug(
+        `Added ${workspaceAdmins.length} workspace owners/admins to space ${spaceId}`,
+      );
+    }
   }
 }
