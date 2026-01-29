@@ -79,6 +79,7 @@ export async function getSidebarPages(
 
 export async function getAllSidebarPages(
   params: SidebarPagesParams,
+  fetchAllPages = true,
 ): Promise<InfiniteData<IPagination<IPage>, unknown>> {
   let page = 1;
   let hasNextPage = false;
@@ -95,7 +96,7 @@ export async function getAllSidebarPages(
     hasNextPage = data.meta.hasNextPage;
 
     page += 1;
-  } while (hasNextPage);
+  } while (hasNextPage && fetchAllPages);
 
   return {
     pageParams,

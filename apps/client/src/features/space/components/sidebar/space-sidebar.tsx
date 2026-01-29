@@ -22,7 +22,7 @@ import classes from "./space-sidebar.module.css";
 import React, { useCallback } from "react";
 import { useAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
-import { selectedPageIdsAtom, sortOrderAtom, SortOrder } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import { selectedPageIdsAtom, selectionModeAtom, sortOrderAtom, SortOrder } from "@/features/page/tree/atoms/tree-data-atom.ts";
 import { Link, useLocation, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { useDisclosure } from "@mantine/hooks";
@@ -49,6 +49,7 @@ export function SpaceSidebar() {
   const { t } = useTranslation();
   const [tree] = useAtom(treeApiAtom);
   const [selectedPageIds, setSelectedPageIds] = useAtom(selectedPageIdsAtom);
+  const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const location = useLocation();
   const [opened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
@@ -68,8 +69,23 @@ export function SpaceSidebar() {
 
   const clearSelection = useCallback(() => {
     setSelectedPageIds(new Set());
+    setSelectionMode(false);
     tree?.deselectAll();
-  }, [setSelectedPageIds, tree]);
+  }, [setSelectedPageIds, setSelectionMode, tree]);
+
+  const enableSelectionMode = useCallback(() => {
+    setSelectionMode(true);
+  }, [setSelectionMode]);
+
+  const selectAllVisiblePages = useCallback(() => {
+    if (tree) {
+      const visibleIds = new Set<string>();
+      tree.visibleNodes.forEach((node) => {
+        visibleIds.add(node.id);
+      });
+      setSelectedPageIds(visibleIds);
+    }
+  }, [tree, setSelectedPageIds]);
 
   if (!space) {
     return <></>;
@@ -204,6 +220,9 @@ export function SpaceSidebar() {
               spaceId={space.id}
               spaceSlug={spaceSlug || ""}
               onClearSelection={clearSelection}
+              selectionMode={selectionMode}
+              onEnableSelectionMode={enableSelectionMode}
+              onSelectAll={selectAllVisiblePages}
             />
           )}
           <Group className={classes.pagesHeader} justify="space-between">

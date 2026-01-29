@@ -5,7 +5,7 @@ import {
   TreeApi,
   SimpleTree,
 } from "react-arborist";
-import { atom, useAtom } from "jotai";
+import { atom, useAtom, useSetAtom } from "jotai";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import {
   fetchAllAncestorChildren,
@@ -13,7 +13,7 @@ import {
   usePageQuery,
   useUpdatePageMutation,
 } from "@/features/page/queries/page-query.ts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import classes from "@/features/page/tree/styles/tree.module.css";
 import { ActionIcon, Box, Checkbox, Menu, rem } from "@mantine/core";
@@ -33,6 +33,7 @@ import {
 import {
   appendNodeChildrenAtom,
   selectedPageIdsAtom,
+  selectionModeAtom,
   sortOrderAtom,
   treeDataAtom,
 } from "@/features/page/tree/atoms/tree-data-atom.ts";
@@ -73,7 +74,6 @@ import { useTranslation } from "react-i18next";
 import ExportModal from "@/components/common/export-modal";
 import MovePageModal from "../../components/move-page-modal.tsx";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
-import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import CopyPageModal from "../../components/copy-page-modal.tsx";
 import { duplicatePage } from "../../services/page-service.ts";
 
@@ -100,6 +100,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   const treeApiRef = useRef<TreeApi<SpaceTreeNode>>();
   const [openTreeNodes, setOpenTreeNodes] = useAtom<OpenMap>(openTreeNodesAtom);
   const [selectedPageIds, setSelectedPageIds] = useAtom(selectedPageIdsAtom);
+  const [selectionMode] = useAtom(selectionModeAtom);
   const [sortOrder] = useAtom(sortOrderAtom);
   const rootElement = useRef<HTMLDivElement>();
   const [isRootReady, setIsRootReady] = useState(false);
@@ -131,6 +132,16 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   const { data: currentPage } = usePageQuery({
     pageId: extractPageSlugId(pageSlug),
   });
+
+  // Memoize sorted tree data to avoid expensive re-sorting on every render
+  const sortedTreeData = useMemo(() => {
+    return sortTreeNodes(data.filter((node) => node?.spaceId === spaceId), sortOrder);
+  }, [data, spaceId, sortOrder]);
+
+  // Memoize onToggle callback
+  const handleToggle = useCallback(() => {
+    setOpenTreeNodes(treeApiRef.current?.openState);
+  }, [setOpenTreeNodes]);
 
   useEffect(() => {
     if (hasNextPage && !isFetching) {
@@ -182,7 +193,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
             const children = await fetchAllAncestorChildren({
               pageId: ancestor.id,
               spaceId: ancestor.spaceId,
-            });
+            }, true);
 
             flatTreeItems = [
               ...flatTreeItems,
@@ -246,7 +257,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
     <div ref={mergedRef} className={classes.treeContainer}>
       {isRootReady && rootElement.current && (
         <Tree
-          data={sortTreeNodes(data.filter((node) => node?.spaceId === spaceId), sortOrder)}
+          data={sortedTreeData}
           disableDrag={readOnly}
           disableDrop={readOnly}
           disableEdit={readOnly}
@@ -267,16 +278,15 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           rowHeight={30}
           overscanCount={10}
           dndRootElement={rootElement.current}
-          onToggle={() => {
-            setOpenTreeNodes(treeApiRef.current?.openState);
-          }}
+          onToggle={handleToggle}
           initialOpenState={openTreeNodes}
         >
           {(props: NodeRendererProps<SpaceTreeNode>) => (
-            <Node
+            <MemoizedNode
               {...props}
               selectedPageIds={selectedPageIds}
               onToggleSelect={toggleSelectPage}
+              selectionMode={selectionMode}
             />
           )}
         </Tree>
@@ -288,6 +298,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
 interface NodeProps extends NodeRendererProps<any> {
   selectedPageIds: Set<string>;
   onToggleSelect: (pageId: string) => void;
+  selectionMode: boolean;
 }
 
 function Node({
@@ -297,16 +308,16 @@ function Node({
   tree,
   selectedPageIds,
   onToggleSelect,
+  selectionMode,
 }: NodeProps) {
   const { t } = useTranslation();
   const updatePageMutation = useUpdatePageMutation();
-  const [treeData, setTreeData] = useAtom(treeDataAtom);
-  const [, appendChildren] = useAtom(appendNodeChildrenAtom);
+  const setTreeData = useSetAtom(treeDataAtom);
+  const appendChildren = useSetAtom(appendNodeChildrenAtom);
   const emit = useQueryEmit();
   const { spaceSlug } = useParams();
   const timerRef = useRef(null);
-  const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
-  const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
+  const closeMobileSidebar = useSetAtom(mobileSidebarAtom);
   const isSelected = selectedPageIds.has(node.id);
 
   const prefetchPage = () => {
@@ -331,10 +342,10 @@ function Node({
 
   async function handleLoadChildren(node: NodeApi<SpaceTreeNode>) {
     if (!node.data.hasChildren) return;
-    // in conflict with use-query-subscription.ts => case "addTreeNode","moveTreeNode" etc with websocket
-    // if (node.data.children && node.data.children.length > 0) {
-    //   return;
-    // }
+    // Skip fetching if children are already loaded (avoids redundant API calls)
+    if (node.data.children && node.data.children.length > 0) {
+      return;
+    }
 
     try {
       const params: SidebarPagesParams = {
@@ -354,8 +365,7 @@ function Node({
   }
 
   const handleUpdateNodeIcon = (nodeId: string, newIcon: string) => {
-    const updatedTree = updateTreeNodeIcon(treeData, nodeId, newIcon);
-    setTreeData(updatedTree);
+    setTreeData((treeData) => updateTreeNodeIcon(treeData, nodeId, newIcon));
   };
 
   const handleEmojiIconClick = (e: any) => {
@@ -428,18 +438,14 @@ function Node({
         // @ts-ignore
         ref={dragHandle}
         onClick={() => {
-          if (mobileSidebarOpened) {
-            toggleMobileSidebar();
-          }
+          closeMobileSidebar(false);
         }}
         onMouseEnter={prefetchPage}
         onMouseLeave={cancelPagePrefetch}
       >
-        {!tree.props.disableEdit && (
+        {!tree.props.disableEdit && selectionMode && (
           <div
-            className={clsx(classes.checkbox, {
-              [classes.checkboxVisible]: isSelected,
-            })}
+            className={clsx(classes.checkbox, classes.checkboxVisible)}
             onClick={handleCheckboxClick}
           >
             <Checkbox
@@ -485,6 +491,20 @@ function Node({
     </>
   );
 }
+
+const MemoizedNode = React.memo(Node, (prevProps, nextProps) => {
+  return (
+    prevProps.node.id === nextProps.node.id &&
+    prevProps.node.isOpen === nextProps.node.isOpen &&
+    prevProps.node.data.name === nextProps.node.data.name &&
+    prevProps.node.data.icon === nextProps.node.data.icon &&
+    prevProps.node.data.hasChildren === nextProps.node.data.hasChildren &&
+    prevProps.node.children?.length === nextProps.node.children?.length &&
+    prevProps.selectionMode === nextProps.selectionMode &&
+    prevProps.selectedPageIds.has(prevProps.node.id) === nextProps.selectedPageIds.has(nextProps.node.id) &&
+    prevProps.style.top === nextProps.style.top
+  );
+});
 
 interface CreateNodeProps {
   node: NodeApi<SpaceTreeNode>;

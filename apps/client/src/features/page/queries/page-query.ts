@@ -290,11 +290,11 @@ export function usePageBreadcrumbsQuery(
   });
 }
 
-export async function fetchAllAncestorChildren(params: SidebarPagesParams) {
+export async function fetchAllAncestorChildren(params: SidebarPagesParams, fetchAllPages = false) {
   // not using a hook here, so we can call it inside a useEffect hook
   const response = await queryClient.fetchQuery({
-    queryKey: ["sidebar-pages", params],
-    queryFn: () => getAllSidebarPages(params),
+    queryKey: ["sidebar-pages", params, fetchAllPages],
+    queryFn: () => getAllSidebarPages(params, fetchAllPages),
     staleTime: 30 * 60 * 1000,
   });
 

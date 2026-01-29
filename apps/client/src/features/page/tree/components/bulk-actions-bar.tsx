@@ -14,6 +14,9 @@ interface BulkActionsBarProps {
   spaceId: string;
   spaceSlug: string;
   onClearSelection: () => void;
+  selectionMode: boolean;
+  onEnableSelectionMode: () => void;
+  onSelectAll: () => void;
 }
 
 export default function BulkActionsBar({
@@ -21,6 +24,9 @@ export default function BulkActionsBar({
   spaceId,
   spaceSlug,
   onClearSelection,
+  selectionMode,
+  onEnableSelectionMode,
+  onSelectAll,
 }: BulkActionsBarProps) {
   const { t } = useTranslation();
   const bulkDeleteMutation = useBulkDeletePagesMutation();
@@ -66,6 +72,14 @@ export default function BulkActionsBar({
     onClearSelection();
   };
 
+  const handleSelectClick = () => {
+    if (!selectionMode) {
+      onEnableSelectionMode();
+    } else {
+      onSelectAll();
+    }
+  };
+
   return (
     <>
       <Group
@@ -74,54 +88,67 @@ export default function BulkActionsBar({
         pb={6}
         mb={6}
         style={{
-          borderBottom: "1px solid var(--mantine-color-default-border)",
-          paddingLeft: "calc(var(--mantine-spacing-md) + 2px)",
+          paddingLeft: 0,
           paddingRight: "var(--mantine-spacing-md)",
           marginTop: "-2px",
         }}
       >
-        <Text size="xs" fw={500} c={hasSelection ? undefined : "dimmed"} style={{ whiteSpace: "nowrap" }}>
-          {hasSelection ? `${selectedIds.length} selected` : "Bulk actions"}
-        </Text>
         <Group gap="xs" wrap="nowrap">
           <Button
             size="compact-xs"
             variant="subtle"
             color="gray"
-            disabled={!hasSelection}
-            onClick={() => setMoveModalOpened(true)}
+            onClick={handleSelectClick}
           >
-            {t("Move")}
-          </Button>
-          <Button
-            size="compact-xs"
-            variant="subtle"
-            color="gray"
-            disabled={!hasSelection}
-            onClick={handleBulkDuplicate}
-            loading={bulkDuplicateMutation.isPending}
-          >
-            {t("Duplicate")}
-          </Button>
-          <Button
-            size="compact-xs"
-            variant="subtle"
-            color="red"
-            disabled={!hasSelection}
-            onClick={handleBulkDelete}
-            loading={bulkDeleteMutation.isPending}
-          >
-            {t("Delete")}
+            {!selectionMode ? t("Select") : t("Select all")}
           </Button>
           {hasSelection && (
-            <Button
-              size="compact-xs"
-              variant="subtle"
-              color="gray"
-              onClick={onClearSelection}
-            >
-              <IconX size={14} />
-            </Button>
+            <Text size="xs" fw={500} style={{ whiteSpace: "nowrap" }}>
+              {selectedIds.length} {t("selected")}
+            </Text>
+          )}
+        </Group>
+        <Group gap="xs" wrap="nowrap">
+          {selectionMode && (
+            <>
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                color="gray"
+                disabled={!hasSelection}
+                onClick={() => setMoveModalOpened(true)}
+              >
+                {t("Move")}
+              </Button>
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                color="gray"
+                disabled={!hasSelection}
+                onClick={handleBulkDuplicate}
+                loading={bulkDuplicateMutation.isPending}
+              >
+                {t("Duplicate")}
+              </Button>
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                color="red"
+                disabled={!hasSelection}
+                onClick={handleBulkDelete}
+                loading={bulkDeleteMutation.isPending}
+              >
+                {t("Delete")}
+              </Button>
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                color="gray"
+                onClick={onClearSelection}
+              >
+                <IconX size={14} />
+              </Button>
+            </>
           )}
         </Group>
       </Group>

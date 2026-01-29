@@ -7,6 +7,7 @@ export type SortOrder = "alphabetical-asc" | "alphabetical-desc" | "created-newe
 
 export const treeDataAtom = atom<SpaceTreeNode[]>([]);
 export const selectedPageIdsAtom = atom<Set<string>>(new Set<string>());
+export const selectionModeAtom = atom<boolean>(false);
 export const sortOrderAtom = atomWithStorage<SortOrder>("page-sort-order", "alphabetical-asc");
 
 // Atom
