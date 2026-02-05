@@ -12,7 +12,10 @@ import { Space, SpaceMember, User } from '@docmost/db/types/entity.types';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { RemoveSpaceMemberDto } from '../dto/remove-space-member.dto';
 import { UpdateSpaceMemberRoleDto } from '../dto/update-space-member-role.dto';
-import { SpaceRole } from '../../../common/helpers/types/permission';
+import {
+  SpaceRole,
+  SpaceVisibility,
+} from '../../../common/helpers/types/permission';
 import { PaginationResult } from '@docmost/db/pagination/pagination';
 
 @Injectable()
@@ -271,6 +274,35 @@ export class SpaceMemberService {
         'There must be at least one space admin with full access',
       );
     }
+  }
+
+  async joinSpace(
+    userId: string,
+    spaceId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const space = await this.spaceRepo.findById(spaceId, workspaceId);
+    if (!space) {
+      throw new NotFoundException('Space not found');
+    }
+
+    if (space.visibility !== SpaceVisibility.OPEN) {
+      throw new BadRequestException('Space is not open for joining');
+    }
+
+    const existingMember = await this.spaceMemberRepo.getSpaceMemberByTypeId(
+      spaceId,
+      { userId },
+    );
+    if (existingMember) {
+      throw new BadRequestException('You are already a member of this space');
+    }
+
+    await this.spaceMemberRepo.insertSpaceMember({
+      userId,
+      spaceId,
+      role: space.defaultRole,
+    });
   }
 
   async getUserSpaces(

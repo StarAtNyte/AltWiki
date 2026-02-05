@@ -41,7 +41,7 @@ export default function Spaces() {
 
         <Box>
           <Text size="sm" c="dimmed" mb="md">
-            {t("Spaces you belong to")}
+            {t("All spaces in your workspace")}
           </Text>
 
           <AllSpacesList

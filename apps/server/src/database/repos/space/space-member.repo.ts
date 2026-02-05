@@ -235,7 +235,24 @@ export class SpaceMemberRepo {
       .selectFrom('spaces')
       .selectAll()
       .select((eb) => [this.spaceRepo.withMemberCount(eb)])
-      .where('id', 'in', this.getUserSpaceIdsQuery(userId))
+      .select(
+        sql`EXISTS (
+          SELECT 1 FROM space_members
+          WHERE space_members.space_id = spaces.id AND space_members.user_id = ${userId}
+          UNION
+          SELECT 1 FROM space_members sm2
+          INNER JOIN group_users ON group_users.group_id = sm2.group_id
+          WHERE sm2.space_id = spaces.id AND group_users.user_id = ${userId}
+        )`.as('is_member'),
+      )
+      .where((eb) =>
+        eb('id', 'in', this.getUserSpaceIdsQuery(userId)).or(
+          'visibility',
+          '=',
+          'open',
+        ),
+      )
+      .orderBy(sql`is_member`, 'desc')
       .orderBy('createdAt', 'asc');
 
     if (pagination.query) {

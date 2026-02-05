@@ -18,6 +18,7 @@ import {
   getSpaceById,
   getSpaceMembers,
   getSpaces,
+  joinSpace,
   removeSpaceMember,
   createSpace,
   updateSpace,
@@ -182,6 +183,23 @@ export function useDeleteSpaceMutation() {
       queryClient.invalidateQueries({
         predicate: (item) => ["spaces"].includes(item.queryKey[0] as string),
       });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+    },
+  });
+}
+
+export function useJoinSpaceMutation() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation<void, Error, string>({
+    mutationFn: (spaceId) => joinSpace(spaceId),
+    onSuccess: () => {
+      notifications.show({ message: t("Successfully joined space") });
+      queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;

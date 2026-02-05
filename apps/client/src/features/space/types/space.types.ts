@@ -16,6 +16,7 @@ export interface ISpace {
   createdAt: Date;
   updatedAt: Date;
   memberCount?: number;
+  isMember?: boolean;
   spaceId?: string;
   membership?: IMembership;
 }

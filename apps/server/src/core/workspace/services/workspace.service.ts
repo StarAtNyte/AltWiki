@@ -570,4 +570,78 @@ export class WorkspaceService {
       // empty
     }
   }
+
+  /**
+   * Sync workspace owners and admins to spaces as space admins.
+   * If spaceId is provided, sync only that space. Otherwise sync all spaces.
+   */
+  async syncOwnersToSpaces(
+    workspaceId: string,
+    spaceId?: string,
+  ): Promise<{ syncedSpaces: number; addedMembers: number }> {
+    // Get all workspace owners and admins
+    const workspaceAdmins = await this.db
+      .selectFrom('users')
+      .select(['id'])
+      .where('workspaceId', '=', workspaceId)
+      .where('role', 'in', [UserRole.OWNER, UserRole.ADMIN])
+      .where('deletedAt', 'is', null)
+      .execute();
+
+    if (workspaceAdmins.length === 0) {
+      return { syncedSpaces: 0, addedMembers: 0 };
+    }
+
+    // Get spaces to sync
+    let spacesQuery = this.db
+      .selectFrom('spaces')
+      .select(['id'])
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null);
+
+    if (spaceId) {
+      spacesQuery = spacesQuery.where('id', '=', spaceId);
+    }
+
+    const spaces = await spacesQuery.execute();
+
+    let totalAddedMembers = 0;
+
+    for (const space of spaces) {
+      // Get existing space member user IDs
+      const existingMembers = await this.db
+        .selectFrom('spaceMembers')
+        .select(['userId'])
+        .where('spaceId', '=', space.id)
+        .where('userId', 'is not', null)
+        .execute();
+
+      const existingUserIds = new Set(existingMembers.map((m) => m.userId));
+
+      // Filter admins who are not already members
+      const adminsToAdd = workspaceAdmins.filter(
+        (admin) => !existingUserIds.has(admin.id),
+      );
+
+      // Add each admin to the space
+      for (const admin of adminsToAdd) {
+        try {
+          await this.spaceMemberService.addUserToSpace(
+            admin.id,
+            space.id,
+            SpaceRole.ADMIN,
+            workspaceId,
+          );
+          totalAddedMembers++;
+        } catch (error) {
+          // Ignore if user is already a member
+          this.logger.debug(
+            `Could not add workspace admin ${admin.id} to space ${space.id}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+    }
+
+    return { syncedSpaces: spaces.length, addedMembers: totalAddedMembers };
+  }
 }

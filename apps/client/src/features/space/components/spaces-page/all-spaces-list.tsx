@@ -8,14 +8,17 @@ import {
   Menu,
   Anchor,
 } from "@mantine/core";
-import { IconDots, IconSettings } from "@tabler/icons-react";
+import { IconDots, IconSettings, IconUserPlus } from "@tabler/icons-react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import React, { useState } from "react";
 import { useDisclosure } from "@mantine/hooks";
 import { formatMemberCount } from "@/lib";
 import { getSpaceUrl } from "@/lib/config";
-import { prefetchSpace } from "@/features/space/queries/space-query";
+import {
+  prefetchSpace,
+  useJoinSpaceMutation,
+} from "@/features/space/queries/space-query";
 import { SearchInput } from "@/components/common/search-input";
 import Paginate from "@/components/common/paginate";
 import NoTableResults from "@/components/common/no-table-results";
@@ -46,6 +49,7 @@ export default function AllSpacesList({
   const [settingsOpened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
+  const joinSpace = useJoinSpaceMutation();
 
   const handleOpenSettings = (spaceId: string) => {
     setSelectedSpaceId(spaceId);
@@ -124,12 +128,21 @@ export default function AllSpacesList({
                           </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
-                          <Menu.Item
-                            leftSection={<IconSettings size={16} />}
-                            onClick={() => handleOpenSettings(space.id)}
-                          >
-                            {t("Space settings")}
-                          </Menu.Item>
+                          {space.isMember ? (
+                            <Menu.Item
+                              leftSection={<IconSettings size={16} />}
+                              onClick={() => handleOpenSettings(space.id)}
+                            >
+                              {t("Space settings")}
+                            </Menu.Item>
+                          ) : (
+                            <Menu.Item
+                              leftSection={<IconUserPlus size={16} />}
+                              onClick={() => joinSpace.mutate(space.id)}
+                            >
+                              {t("Join space")}
+                            </Menu.Item>
+                          )}
                         </Menu.Dropdown>
                       </Menu>
                     </Group>

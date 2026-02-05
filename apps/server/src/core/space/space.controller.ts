@@ -28,6 +28,7 @@ import {
 import { UpdateSpaceDto } from './dto/update-space.dto';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { SpaceRole } from '../../common/helpers/types/permission';
 import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
@@ -72,7 +73,9 @@ export class SpaceController {
       throw new NotFoundException('Space not found');
     }
 
-    const ability = await this.spaceAbility.createForUser(user, space.id);
+    const ability = await this.spaceAbility.createForUser(user, space.id, {
+      spaceVisibility: space.visibility,
+    });
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Settings)) {
       throw new ForbiddenException();
     }
@@ -86,7 +89,7 @@ export class SpaceController {
 
     const membership = {
       userId: user.id,
-      role: userSpaceRole,
+      role: userSpaceRole || SpaceRole.READER,
       permissions: ability.rules,
     };
 
@@ -152,9 +155,15 @@ export class SpaceController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    const space = await this.spaceService.getSpaceInfo(
+      spaceIdDto.spaceId,
+      workspace.id,
+    );
+
     const ability = await this.spaceAbility.createForUser(
       user,
       spaceIdDto.spaceId,
+      { spaceVisibility: space.visibility },
     );
 
     if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Member)) {
@@ -165,6 +174,20 @@ export class SpaceController {
       spaceIdDto.spaceId,
       workspace.id,
       pagination,
+    );
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('join')
+  async joinSpace(
+    @Body() spaceIdDto: SpaceIdDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    return this.spaceMemberService.joinSpace(
+      user.id,
+      spaceIdDto.spaceId,
+      workspace.id,
     );
   }
 

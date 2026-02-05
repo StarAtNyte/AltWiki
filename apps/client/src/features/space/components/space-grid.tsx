@@ -3,6 +3,7 @@ import React from "react";
 import {
   prefetchSpace,
   useGetSpacesQuery,
+  useJoinSpaceMutation,
 } from "@/features/space/queries/space-query.ts";
 import { getSpaceUrl } from "@/lib/config.ts";
 import { Link } from "react-router-dom";
@@ -16,8 +17,9 @@ import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts
 export default function SpaceGrid() {
   const { t } = useTranslation();
   const { data, isLoading } = useGetSpacesQuery({ page: 1, limit: 10 });
+  const joinSpace = useJoinSpaceMutation();
 
-  const cards = data?.items.slice(0, 9).map((space, index) => (
+  const cards = data?.items.slice(0, 9).map((space) => (
     <Card
       key={space.id}
       p="xs"
@@ -43,9 +45,24 @@ export default function SpaceGrid() {
         {space.name}
       </Text>
 
-      <Text c="dimmed" size="xs" fw={700} mt="md">
-        {formatMemberCount(space.memberCount, t)}
-      </Text>
+      <Group justify="space-between" align="center" mt="md">
+        <Text c="dimmed" size="xs" fw={700}>
+          {formatMemberCount(space.memberCount, t)}
+        </Text>
+        {!space.isMember && (
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              joinSpace.mutate(space.id);
+            }}
+          >
+            {t("Join")}
+          </Button>
+        )}
+      </Group>
     </Card>
   ));
 
@@ -53,7 +70,7 @@ export default function SpaceGrid() {
     <>
       <Group justify="space-between" align="center" mb="md">
         <Text fz="sm" fw={500}>
-          {t("Spaces you belong to")}
+          {t("Spaces")}
         </Text>
       </Group>
 

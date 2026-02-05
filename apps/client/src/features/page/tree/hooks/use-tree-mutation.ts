@@ -143,10 +143,10 @@ export function useTreeMutation<T>(spaceId: string) {
       newPosition = generateJitteredKeyBetween(afterPosition, beforePosition);
     }
 
-    // update the node position in tree
+    // update the node position and parentPageId in tree
     tree.update({
       id: draggedNodeId,
-      changes: { position: newPosition } as any,
+      changes: { position: newPosition, parentPageId: args.parentId } as any,
     });
 
     const previousParent = args.dragNodes[0].parent;
@@ -163,7 +163,7 @@ export function useTreeMutation<T>(spaceId: string) {
       if (childrenCount === 0) {
         tree.update({
           id: previousParent.id,
-          changes: { ...previousParent.data, hasChildren: false } as any,
+          changes: { hasChildren: false } as any,
         });
       }
     }

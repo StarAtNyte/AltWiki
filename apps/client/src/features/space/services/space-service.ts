@@ -36,6 +36,10 @@ export async function deleteSpace(spaceId: string): Promise<void> {
   await api.post<void>("/spaces/delete", { spaceId });
 }
 
+export async function joinSpace(spaceId: string): Promise<void> {
+  await api.post("/spaces/join", { spaceId });
+}
+
 export async function getSpaceMembers(
   spaceId: string,
   params?: QueryParams,
