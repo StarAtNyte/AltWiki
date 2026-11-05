@@ -89,3 +89,16 @@
     color: var(--app-ink);
   }
 }
+
+/* Space/page routes have less width (sidebar open): narrow the search pill so
+   the workspace name beside the bell is not truncated. */
+.inner:not([data-home]) .center {
+  width: 100%;
+  max-width: rem(400px);
+  justify-self: center;
+
+  & > * {
+    width: 100%;
+    max-width: 100%;
+  }
+}
