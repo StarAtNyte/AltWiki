@@ -5,6 +5,13 @@ import { getBasename } from './basename';
 // CJS/ESM interop: .default exists in Vite, not in NestJS
 const TurndownService = (_TurndownService as any).default || _TurndownService;
 
+function sanitizeMdLinkText(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/([\[\]!])/g, '\\$1')
+    .replace(/[\r\n]+/g, ' ');
+}
+
 export function htmlToMarkdown(html: string): string {
   const turndownService = new TurndownService({
     headingStyle: 'atx',
@@ -17,16 +24,51 @@ export function htmlToMarkdown(html: string): string {
     TurndownPluginGfm.tables,
     TurndownPluginGfm.strikethrough,
     TurndownPluginGfm.highlightedCodeBlock,
+    tabs,
     taskList,
     callout,
     preserveDetail,
     listParagraph,
+    orderedListItem,
     mathInline,
     mathBlock,
     iframeEmbed,
+    image,
     video,
+    footnoteRef,
+    footnotesList,
   ]);
-  return turndownService.turndown(html).replaceAll('<br>', ' ');
+  const htmlWithoutColgroups = html.replace(
+    /<colgroup\b[^>]*>[\s\S]*?<\/colgroup>/gi,
+    '',
+  );
+  return turndownService.turndown(htmlWithoutColgroups).replaceAll('<br>', ' ');
+}
+
+function tabs(turndownService: _TurndownService) {
+  turndownService.addRule('tabs', {
+    filter: (node: HTMLInputElement) =>
+      node.nodeName === 'DIV' && node.getAttribute('data-type') === 'tabs',
+    replacement: (_content: string, node: HTMLInputElement) => {
+      const sections = Array.from(
+        node.querySelectorAll(':scope > div[data-type="tab"]'),
+      ).map((tabNode) => {
+        const label =
+          tabNode.querySelector(':scope > div[data-type="tabLabel"]')
+            ?.textContent ?? '';
+        const panel = tabNode.querySelector(
+          ':scope > div[data-type="tabPanel"]',
+        );
+        const heading = `#### ${turndownService.escape(label.replace(/\s+/g, ' ').trim())}`;
+        const body = panel
+          ? turndownService.turndown(panel.innerHTML).trim()
+          : '';
+        return body ? `${heading}\n\n${body}` : heading;
+      });
+
+      return `\n\n${sections.join('\n\n')}\n\n`;
+    },
+  });
 }
 
 function listParagraph(turndownService: _TurndownService) {
@@ -37,6 +79,42 @@ function listParagraph(turndownService: _TurndownService) {
         return content;
       }
       return `\n\n${content}\n\n`;
+    },
+  });
+}
+
+function orderedListItem(turndownService: _TurndownService) {
+  turndownService.addRule('orderedListItem', {
+    filter: function (node: HTMLInputElement) {
+      return (
+        node.nodeName === 'LI' && node.getAttribute('data-type') !== 'taskItem'
+      );
+    },
+    replacement: (content: string, node: HTMLInputElement, options: any) => {
+      const parent = node.parentNode as HTMLElement;
+      if (parent.nodeName !== 'OL' && parent.nodeName !== 'UL') {
+        return content;
+      }
+
+      content = content
+        .replace(/^\n+/, '')
+        .replace(/\n+$/, '\n')
+        .replace(/\n/gm, '\n  ');
+
+      let prefix: string;
+      if (parent.nodeName === 'OL') {
+        const start = parseInt(parent.getAttribute('start') || '1', 10);
+        const index = Array.prototype.indexOf.call(parent.children, node);
+        prefix = `${start + index}. `;
+      } else {
+        prefix = `${options.bulletListMarker} `;
+      }
+
+      return (
+        prefix +
+        content +
+        (node.nextSibling && !/\n$/.test(content) ? '\n' : '')
+      );
     },
   });
 }
@@ -63,25 +141,15 @@ function taskList(turndownService: _TurndownService) {
         node.parentNode.nodeName === 'UL'
       );
     },
-    replacement: function (content: string, node: HTMLInputElement) {
-      const checkbox = node.querySelector(
-        'input[type="checkbox"]',
-      ) as HTMLInputElement;
-      const isChecked = checkbox.checked;
+    replacement: function (_content: string, node: HTMLInputElement) {
+      const isChecked = node.getAttribute('data-checked') === 'true';
+      const div = node.querySelector('div');
+      const text = div ? div.textContent.trim() : node.textContent.trim();
 
-      // Process content like regular list items
-      content = content
-        .replace(/^\n+/, '') // remove leading newlines
-        .replace(/\n+$/, '\n') // replace trailing newlines with just a single one
-        .replace(/\n/gm, '\n  '); // indent nested content with 2 spaces
-
-      // Create the checkbox prefix
       const prefix = `- ${isChecked ? '[x]' : '[ ]'} `;
 
       return (
-        prefix +
-        content +
-        (node.nextSibling && !/\n$/.test(content) ? '\n' : '')
+        prefix + text + (node.nextSibling && !/\n$/.test(text) ? '\n' : '')
       );
     },
   });
@@ -109,7 +177,7 @@ function preserveDetail(turndownService: _TurndownService) {
         )
         .join('');
 
-      return `\n<details>\n${detailSummary}\n\n${detailsContent}\n\n</details>\n`;
+      return `\n<details markdown="1">\n${detailSummary}\n\n${detailsContent}\n\n</details>\n`;
     },
   });
 }
@@ -154,6 +222,70 @@ function iframeEmbed(turndownService: _TurndownService) {
   });
 }
 
+function image(turndownService: _TurndownService) {
+  turndownService.addRule('image', {
+    filter: 'img',
+    replacement: function (_content: string, node: HTMLInputElement) {
+      const src = node.getAttribute('src') || '';
+      if (!src) return '';
+      const alt = sanitizeMdLinkText(node.getAttribute('alt') || '');
+      const title = node.getAttribute('title') || '';
+      const titlePart = title ? ' "' + title.replace(/"/g, '\\"') + '"' : '';
+      return '![' + alt + '](' + src + titlePart + ')';
+    },
+  });
+}
+
+function getFootnoteAnchor(node: HTMLElement): HTMLElement | null {
+  const child = node.firstElementChild as HTMLElement | null;
+  return child?.nodeName === 'A' && child.classList.contains('footnote-ref')
+    ? child
+    : null;
+}
+
+function footnoteRef(turndownService: _TurndownService) {
+  turndownService.addRule('footnoteRef', {
+    filter: function (node: HTMLInputElement) {
+      return node.nodeName === 'SUP' && !!getFootnoteAnchor(node);
+    },
+    replacement: function (_content: string, node: HTMLInputElement) {
+      const anchor = getFootnoteAnchor(node);
+      const number =
+        anchor.getAttribute('data-reference-number') || anchor.textContent;
+      return `[^${number}]`;
+    },
+  });
+}
+
+function footnotesList(turndownService: _TurndownService) {
+  turndownService.addRule('footnotesList', {
+    filter: function (node: HTMLInputElement) {
+      return node.nodeName === 'OL' && node.classList.contains('footnotes');
+    },
+    replacement: function (_content: string, node: HTMLInputElement) {
+      const items = Array.from(node.children).filter(
+        (child) => child.nodeName === 'LI',
+      );
+      const definitions = items.map((li, index) => {
+        const number =
+          (li.getAttribute('id') || '').replace('fn:', '') ||
+          String(index + 1);
+        const markdown = turndownService
+          .turndown((li as HTMLElement).innerHTML)
+          .trim();
+        // continuation lines need a 4-space indent to stay in the footnote
+        const [first, ...rest] = markdown.split('\n');
+        const body = [
+          first,
+          ...rest.map((line: string) => (line.trim() ? `    ${line}` : line)),
+        ].join('\n');
+        return `[^${number}]: ${body}`;
+      });
+      return `\n\n${definitions.join('\n')}\n\n`;
+    },
+  });
+}
+
 function video(turndownService: _TurndownService) {
   turndownService.addRule('video', {
     filter: function (node: HTMLInputElement) {
@@ -161,7 +293,8 @@ function video(turndownService: _TurndownService) {
     },
     replacement: function (_content: string, node: HTMLInputElement) {
       const src = node.getAttribute('src') || '';
-      const name = getBasename(src) || src;
+      const ariaLabel = node.getAttribute('aria-label');
+      const name = sanitizeMdLinkText(ariaLabel || getBasename(src) || src);
       return '[' + name + '](' + src + ')';
     },
   });

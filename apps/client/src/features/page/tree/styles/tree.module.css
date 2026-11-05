@@ -6,14 +6,16 @@
     height: 100%;
     min-width: 0;
     position: relative;
-
-    > div, > div > .tree {
-        height: 100% !important;
-    }
+    /* DocTree renders a vanilla <ul role="tree"> with no internal virtualizer,
+       so the container must own the scroll. Without this the tree grows past
+       its parent and the page scrolls instead. */
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
-/* Indent per level comes from react-arborist (default 24px). Guides are
-   drawn through each ancestor's chevron centre (indent * i + 10px). */
+/* `.node` sits on both DocTreeRow's wrapper <div> and SpaceTreeRow's <a>.
+   The outer one paints the row (hover/current/drop states); the inner one
+   stays transparent so translucent fills don't stack. */
 .node {
     --tree-indent: 24px;
     --tree-row-bg: transparent;
@@ -23,18 +25,58 @@
     display: flex;
     align-items: center;
     height: 100%;
-    width: calc(100% - rem(10px)); /* not to overlap with scroll bar */
+    width: 100%;
     text-decoration: none;
     color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
     background-color: var(--tree-row-bg);
     transition: background-color var(--app-transition-fast), color var(--app-transition-fast);
 
+    /* Gate hover styles to mouse-capable devices. Touch browsers synthesize
+       :hover on the first tap (sticky hover) and only fire click on the
+       second tap, requiring a double-tap to navigate. */
+    @media (hover: hover) {
+        &:hover {
+            --tree-row-bg: var(--app-hover);
+            color: var(--mantine-color-text);
+        }
+
+        &:hover .actions {
+            visibility: visible;
+        }
+    }
+
+    .actions {
+        visibility: hidden;
+        position: absolute;
+        height: 100%;
+        top: 0;
+        inset-inline-end: 0;
+        display: flex;
+        align-items: center;
+        padding-inline-end: rem(2px);
+        padding-inline-start: rem(10px);
+        border-start-end-radius: var(--mantine-radius-sm);
+        border-end-end-radius: var(--mantine-radius-sm);
+        background: linear-gradient(to right, transparent 0, var(--tree-actions-bg) rem(10px));
+    }
+
+    &:focus-within .actions {
+        visibility: visible;
+    }
+}
+
+.node .node {
+    --tree-actions-bg: inherit;
+    background-color: transparent;
+
+    /* Indent guides through each ancestor's chevron centre (indent * i + 10px),
+       drawn into the wrapper's indent padding to the left of the row. */
     &::before {
         content: "";
         position: absolute;
         top: -2px;
         bottom: -2px;
-        left: 0;
+        right: 100%;
         width: calc(var(--tree-level, 0) * var(--tree-indent));
         pointer-events: none;
         background-image: repeating-linear-gradient(
@@ -47,59 +89,6 @@
             transparent var(--tree-indent)
         );
     }
-
-    &:hover {
-        --tree-row-bg: var(--app-hover);
-        color: var(--mantine-color-text);
-    }
-
-    .actions {
-        visibility: hidden;
-        position: absolute;
-        height: 100%;
-        top: 0;
-        right: 0;
-        display: flex;
-        align-items: center;
-        padding-right: rem(2px);
-        padding-left: rem(10px);
-        border-top-right-radius: var(--mantine-radius-sm);
-        border-bottom-right-radius: var(--mantine-radius-sm);
-        background: linear-gradient(to right, transparent 0, var(--tree-actions-bg) rem(10px));
-    }
-
-    &:hover .actions {
-        visibility: visible;
-    }
-}
-
-.node:global(.willReceiveDrop) {
-    --tree-row-bg: var(--app-accent-soft);
-    box-shadow: inset 0 0 0 1px var(--app-accent);
-}
-
-/* Current page: neutral filled row, full-strength text. */
-.node:global(.isSelected) {
-    --tree-row-bg: var(--app-active);
-    --tree-actions-bg: light-dark(#ebebec, #262628);
-    color: var(--mantine-color-text);
-}
-
-.node:global(.isSelected) .text {
-    font-weight: 500;
-}
-
-.row:focus-visible .node:global(.isFocused) {
-    box-shadow: inset 0 0 0 1.5px var(--app-focus-ring);
-}
-
-.row {
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.row:focus {
-    outline: none;
 }
 
 .icon {
@@ -107,10 +96,18 @@
     flex-shrink: 0;
 }
 
+.actionIcon {
+    color: light-dark(var(--mantine-color-dark-3), var(--mantine-color-gray-4));
+}
+
 .text {
     flex: 1;
+    /* min-width: 0 lets a flex child shrink below its content size — required
+       for text-overflow: ellipsis on flex items. */
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: rem(14px);
     font-weight: 500;
     line-height: 1.3;
@@ -124,20 +121,108 @@
     padding-bottom: 2px;
 }
 
+/* Strip the browser's default <ul> bullet + indent from the DocTree
+   <ul role="tree"> and nested <ul role="group"> nodes. The tree's own indent
+   is driven by paddingLeft on .rowWrapper. */
+[role="tree"],
+[role="tree"] [role="group"] {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.rowWrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    border-radius: var(--mantine-radius-sm);
+}
+
+.node[data-dragging="true"] {
+    opacity: 0.4;
+}
+
+.node:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 1.5px var(--app-focus-ring);
+}
+
+.node :focus-visible {
+    outline-offset: -2px;
+}
+
+/* Current page: neutral filled row, full-strength text. */
+.node[data-selected="true"] {
+    --tree-row-bg: var(--app-active);
+    --tree-actions-bg: light-dark(#ebebec, #262628);
+    color: var(--mantine-color-text);
+}
+
+.node[data-selected="true"] .actions {
+    visibility: visible;
+}
+
+.node[data-receiving-drop="make-child"] {
+    --tree-row-bg: var(--app-accent-soft);
+    box-shadow: inset 0 0 0 1px var(--app-accent);
+}
+
+.node[data-receiving-drop="make-child-blocked"] {
+    box-shadow: inset 0 0 0 1px light-dark(
+        var(--mantine-color-red-5),
+        var(--mantine-color-red-7)
+    );
+}
+
+.dropLine {
+    position: absolute;
+    left: var(--drop-line-indent, 0);
+    right: 8px;
+    height: 2px;
+    background: var(--app-accent);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.dropLine::before {
+    content: "";
+    position: absolute;
+    left: -4px;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    color: var(--app-accent);
+    background: var(--mantine-color-body);
+}
+
+.dropLine[data-blocked="true"] {
+    background: light-dark(
+        var(--mantine-color-red-5),
+        var(--mantine-color-red-4)
+    );
+}
+
+.dropLine[data-edge="top"] {
+    top: -1px;
+}
+
+.dropLine[data-edge="bottom"] {
+    bottom: -1px;
+}
+
+/* AltWiki bulk selection */
 .checkbox {
     display: none;
     align-items: center;
-    margin-right: 4px;
+    margin-inline-end: 4px;
 }
 
 .checkboxVisible {
     display: flex;
 }
 
-.node:hover .checkbox {
-    display: flex;
-}
-
-.bulkSelected {
+.node:has(> .bulkSelected) {
     --tree-row-bg: var(--app-accent-soft);
 }

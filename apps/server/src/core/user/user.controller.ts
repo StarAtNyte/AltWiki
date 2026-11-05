@@ -10,6 +10,7 @@ import { UserService } from './user.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OAuthScope } from '../../common/decorators/oauth-scope.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
@@ -24,6 +25,7 @@ export class UserController {
 
   @HttpCode(HttpStatus.OK)
   @Post('me')
+  @OAuthScope('read')
   async getUserInfo(
     @AuthUser() authUser: User,
     @AuthWorkspace() workspace: Workspace,
@@ -34,10 +36,17 @@ export class UserController {
 
     const { licenseKey, ...rest } = workspace;
 
+    // AltWiki: never expose the Gemini API key to clients
+    const settings = rest.settings as any;
     const workspaceInfo = {
       ...rest,
+      settings: settings?.integrations?.geminiApiKey
+        ? {
+            ...settings,
+            integrations: { ...settings.integrations, geminiApiKey: '••••••••' },
+          }
+        : rest.settings,
       memberCount,
-      hasLicenseKey: Boolean(licenseKey),
     };
 
     return { user: authUser, workspace: workspaceInfo };

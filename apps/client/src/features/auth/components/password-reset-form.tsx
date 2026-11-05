@@ -1,18 +1,20 @@
-import * as z from "zod";
 import { AuthBrand } from "@/features/auth/components/auth-layout.tsx";
-import { useForm, zodResolver } from "@mantine/form";
+import { z } from "zod/v4";
+import { useForm } from "@mantine/form";
+import { zod4Resolver } from "mantine-form-zod-resolver";
 import useAuth from "@/features/auth/hooks/use-auth";
-import { IPasswordReset } from "@/features/auth/types/auth.types";
 import { Box, Button, Container, PasswordInput, Title } from "@mantine/core";
 import classes from "./auth.module.css";
 import { useRedirectIfAuthenticated } from "@/features/auth/hooks/use-redirect-if-authenticated.ts";
 import { useTranslation } from "react-i18next";
+import { AuthLayout } from "./auth-layout.tsx";
 
 const formSchema = z.object({
   newPassword: z
     .string()
     .min(8, { message: "Password must contain at least 8 characters" }),
 });
+type FormValues = z.infer<typeof formSchema>;
 
 interface PasswordResetFormProps {
   resetToken?: string;
@@ -23,14 +25,14 @@ export function PasswordResetForm({ resetToken }: PasswordResetFormProps) {
   const { passwordReset, isLoading } = useAuth();
   useRedirectIfAuthenticated();
 
-  const form = useForm<IPasswordReset>({
-    validate: zodResolver(formSchema),
+  const form = useForm<FormValues>({
+    validate: zod4Resolver(formSchema),
     initialValues: {
       newPassword: "",
     },
   });
 
-  async function onSubmit(data: IPasswordReset) {
+  async function onSubmit(data: FormValues) {
     await passwordReset({
       token: resetToken,
       newPassword: data.newPassword,
@@ -38,6 +40,7 @@ export function PasswordResetForm({ resetToken }: PasswordResetFormProps) {
   }
 
   return (
+    <AuthLayout>
     <Container size={420} className={classes.container}>
       <Box p="xl" className={classes.containerBox}>
         <AuthBrand />
@@ -51,6 +54,11 @@ export function PasswordResetForm({ resetToken }: PasswordResetFormProps) {
             placeholder={t("Your new password")}
             variant="filled"
             mt="md"
+            visibilityToggleButtonProps={{
+              "aria-label": t("Toggle password visibility"),
+              "aria-hidden": false,
+              tabIndex: 0,
+            }}
             {...form.getInputProps("newPassword")}
           />
 
@@ -60,5 +68,6 @@ export function PasswordResetForm({ resetToken }: PasswordResetFormProps) {
         </form>
       </Box>
     </Container>
+    </AuthLayout>
   );
 }

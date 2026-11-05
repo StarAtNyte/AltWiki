@@ -338,6 +338,15 @@ export const isRowGripSelected = ({
   return !!gripRow;
 };
 
+// TipTap's `editor.view` proxy throws if accessed before mount or after destroy.
+// Guard floating-menu callbacks (getReferencedVirtualElement, shouldShow) with
+// this before touching `editor.view.nodeDOM(...)`.
+export function isEditorReady(
+  editor: Editor | null | undefined,
+): editor is Editor {
+  return !!editor && editor.isInitialized;
+}
+
 export function isTextSelected(editor: Editor) {
   const {
     state: {
@@ -382,5 +391,43 @@ export function sanitizeUrl(url: string | undefined): string {
   return sanitized === "about:blank" ? "" : sanitized;
 }
 
+export function isHttpUrl(url: string | null | undefined): boolean {
+  if (!url) return false;
+  try {
+    const { protocol } = new URL(url);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export function isInternalFileUrl(url: string | undefined): boolean {
+  if (!url) return false;
+  const normalized = url.trim();
+  return normalized.startsWith("/api/files/") || normalized.startsWith("/files/");
+}
+
 const alphabet = "abcdefghijklmnopqrstuvwxyz";
 export const generateNodeId = customAlphabet(alphabet, 12);
+
+export function copyToClipboard(text: string): void {
+  if ("clipboard" in navigator) {
+    navigator.clipboard.writeText(text).catch(() => {
+      execCommandCopy(text);
+    });
+  } else {
+    execCommandCopy(text);
+  }
+}
+
+export function execCommandCopy(text: string): void {
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textarea);
+}

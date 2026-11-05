@@ -4,6 +4,7 @@ import "./styles/glass.css";
 import "@mantine/spotlight/styles.css";
 import "@mantine/notifications/styles.css";
 import '@mantine/dates/styles.css';
+import "@/styles/a11y-overrides.css";
 
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
@@ -22,6 +23,8 @@ import {
   isCloud,
   isPostHogEnabled,
 } from "@/lib/config.ts";
+import { installChunkLoadRecovery } from "@/lib/chunk-load-recovery.ts";
+import { AppErrorBoundary } from "@/components/ui/app-error-boundary.tsx";
 import posthog from "posthog-js";
 
 export const queryClient = new QueryClient({
@@ -44,23 +47,10 @@ if (isCloud() && isPostHogEnabled) {
   });
 }
 
-// After a deploy, an open tab may ask for a lazy chunk whose hash no longer
-// exists. Reload once to pick up the new build instead of showing a blank
-// route.
-window.addEventListener("vite:preloadError", (event) => {
-  const key = "altwiki.chunk-reload";
-  if (sessionStorage.getItem(key)) return;
-  sessionStorage.setItem(key, "1");
-  event.preventDefault();
-  window.location.reload();
-});
-window.addEventListener("load", () => {
-  setTimeout(() => sessionStorage.removeItem("altwiki.chunk-reload"), 10000);
-});
+installChunkLoadRecovery();
 
-const root = ReactDOM.createRoot(
-  document.getElementById("root") as HTMLElement,
-);
+const container = document.getElementById("root") as HTMLElement;
+const root = (container as any).__reactRoot ??= ReactDOM.createRoot(container);
 
 root.render(
   <BrowserRouter>
@@ -74,7 +64,9 @@ root.render(
           <Notifications position="bottom-center" limit={3} zIndex={10000} />
           <HelmetProvider>
             <PostHogProvider client={posthog}>
-              <App />
+              <AppErrorBoundary>
+                <App />
+              </AppErrorBoundary>
             </PostHogProvider>
           </HelmetProvider>
         </QueryClientProvider>

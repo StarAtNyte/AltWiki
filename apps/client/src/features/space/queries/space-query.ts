@@ -1,6 +1,7 @@
 import { assignRandomSpaceIcon } from "@/features/space/icons/space-icons.ts";
 import {
   keepPreviousData,
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -11,7 +12,6 @@ import {
   IChangeSpaceMemberRole,
   IRemoveSpaceMember,
   ISpace,
-  ISpaceMember,
 } from "@/features/space/types/space.types";
 import {
   addSpaceMember,
@@ -44,6 +44,35 @@ export function useGetSpacesQuery(
   });
 }
 
+/**
+ * Every space the user can see (member spaces plus open spaces flagged with
+ * isMember=false), walking the cursor pages. Used by the space rail, the home
+ * grid, quick create and the search filters, which all need the full list.
+ * Shares the "spaces" key prefix so space mutations invalidate it too.
+ */
+export const ALL_SPACES_QUERY_KEY = ["spaces", "all"];
+const ALL_SPACES_MAX = 1000;
+
+export async function fetchAllSpaces(): Promise<ISpace[]> {
+  const items: ISpace[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await getSpaces({ limit: 100, cursor });
+    items.push(...page.items);
+    cursor = page.meta?.hasNextPage ? page.meta.nextCursor ?? undefined : undefined;
+  } while (cursor && items.length < ALL_SPACES_MAX);
+  return items;
+}
+
+export function useAllSpacesQuery(): UseQueryResult<ISpace[], Error> {
+  return useQuery({
+    queryKey: ALL_SPACES_QUERY_KEY,
+    queryFn: fetchAllSpaces,
+    placeholderData: keepPreviousData,
+    refetchOnMount: true,
+  });
+}
+
 export function useSpaceQuery(spaceId: string): UseQueryResult<ISpace, Error> {
   const query = useQuery({
     queryKey: ["space", spaceId],
@@ -71,9 +100,10 @@ export const prefetchSpace = (spaceSlug: string, spaceId?: string) => {
 
   if (spaceId) {
     // this endpoint only accepts uuid for now
-    queryClient.prefetchQuery({
+    queryClient.prefetchInfiniteQuery({
       queryKey: ["recent-changes", spaceId],
-      queryFn: () => getRecentChanges(spaceId),
+      queryFn: () => getRecentChanges({ spaceId }),
+      initialPageParam: undefined,
     });
   }
 };
@@ -220,15 +250,19 @@ export function useJoinSpaceMutation() {
   });
 }
 
-export function useSpaceMembersQuery(
+export function useSpaceMembersInfiniteQuery(
   spaceId: string,
-  params?: QueryParams,
-): UseQueryResult<IPagination<ISpaceMember>, Error> {
-  return useQuery({
-    queryKey: ["spaceMembers", spaceId, params],
-    queryFn: () => getSpaceMembers(spaceId, params),
+  query?: string,
+) {
+  return useInfiniteQuery({
+    queryKey: ["spaceMembers", spaceId, query],
+    queryFn: ({ pageParam }) =>
+      getSpaceMembers(spaceId, { cursor: pageParam, limit: 50, query }),
     enabled: !!spaceId,
     placeholderData: keepPreviousData,
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.meta.hasNextPage ? lastPage.meta.nextCursor : undefined,
   });
 }
 

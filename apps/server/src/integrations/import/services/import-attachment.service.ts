@@ -18,6 +18,7 @@ import { getAttachmentFolderPath } from '../../../core/attachment/attachment.uti
 import { AttachmentType } from '../../../core/attachment/attachment.constants';
 import { unwrapFromParagraph } from '../utils/import-formatter';
 import { resolveRelativeAttachmentPath } from '../utils/import.utils';
+import { imageDimensionsFromData } from 'image-dimensions';
 import { load } from 'cheerio';
 import pLimit from 'p-limit';
 import { InjectQueue } from '@nestjs/bullmq';
@@ -42,6 +43,7 @@ const VIDEO_EXTENSIONS = new Set([
 
 function isVideoFile(fileName: string, mimeType?: string): boolean {
   if (mimeType?.startsWith('video/')) return true;
+  if (mimeType?.startsWith('audio/')) return false;
   const ext = path.extname(fileName).toLowerCase();
   // .ogg is ambiguous (often audio); only trust it with a video mime
   return ext !== '.ogg' && VIDEO_EXTENSIONS.has(ext);
@@ -129,20 +131,6 @@ export class ImportAttachmentService {
       }
     >();
 
-    // Build a lookup map from href to mimeType from pageAttachments
-    // This is used to derive file extensions for files without extensions (common in Confluence)
-    const mimeTypeByHref = new Map<string, string>();
-    // Real file names (Confluence XML exports store files as {id}/{version})
-    const fileNameByHref = new Map<string, string>();
-    for (const att of pageAttachments) {
-      if (att.mimeType && att.mimeType !== 'application/octet-stream') {
-        mimeTypeByHref.set(att.href, att.mimeType);
-      }
-      if (att.fileName) {
-        fileNameByHref.set(att.href, att.fileName);
-      }
-    }
-
     //this.logger.debug(`Found ${drawioPairs.size} Draw.io pairs to process`);
 
     // Process Draw.io pairs and create combined SVG files
@@ -225,25 +213,62 @@ export class ImportAttachmentService {
       }
     }
 
+    // Build a map from resolved archive path → real filename from Confluence
+    // metadata. Confluence Server archives often store files under numeric IDs
+    // (e.g. "attachments/65601/65602") instead of the original filename.
+    // Also register aliases so HTML references using the original filename
+    // (e.g. "attachments/pageId/original.mp3") resolve to the numeric path.
+    const pageDir = path.dirname(pageRelativePath);
+    const attachmentNameByRelPath = new Map<string, string>();
+    const mimeTypeByRelPath = new Map<string, string>();
+    for (const attachment of pageAttachments) {
+      const relPath = resolveRelativeAttachmentPath(
+        attachment.href,
+        pageDir,
+        attachmentCandidates,
+      );
+      // AltWiki: keep the declared MIME type (Confluence MEDIA_TYPE) so files
+      // stored without an extension get a proper extension and mime.
+      const declaredMime =
+        attachment.mimeType && attachment.mimeType !== 'application/octet-stream'
+          ? attachment.mimeType
+          : undefined;
+      if (relPath && declaredMime) {
+        mimeTypeByRelPath.set(relPath, declaredMime);
+      }
+
+      if (relPath && attachment.fileName) {
+        attachmentNameByRelPath.set(relPath, attachment.fileName);
+
+        const dir = path.posix.dirname(relPath);
+        const aliasKey = `${dir}/${attachment.fileName}`;
+        if (!attachmentCandidates.has(aliasKey)) {
+          attachmentCandidates.set(aliasKey, attachmentCandidates.get(relPath)!);
+          attachmentNameByRelPath.set(aliasKey, attachment.fileName);
+          if (declaredMime) mimeTypeByRelPath.set(aliasKey, declaredMime);
+        }
+      }
+    }
+
     const uploadOnce = (relPath: string) => {
       const abs = attachmentCandidates.get(relPath)!;
       const attachmentId = v7();
-      // Prefer the declared attachment name over the on-disk name
-      const sourceName = fileNameByHref.get(relPath) || path.basename(abs);
-      let ext = path.extname(sourceName);
 
-      // If file has no extension, try to derive it from the MIME type (common for Confluence attachments)
-      if (!ext && mimeTypeByHref.has(relPath)) {
-        const mimeType = mimeTypeByHref.get(relPath)!;
-        ext = getExtensionFromMimeType(mimeType);
+      const realName = attachmentNameByRelPath.get(relPath);
+      const baseName = realName || path.basename(abs);
+      const declaredMime = mimeTypeByRelPath.get(relPath);
+      let ext = path.extname(baseName);
+
+      // AltWiki: no extension (e.g. Confluence "{id}/{version}") -> derive from MIME
+      if (!ext && declaredMime) {
+        ext = getExtensionFromMimeType(declaredMime);
       }
       ext = ext.toLowerCase();
 
       const fileNameWithExt =
-        (sanitizeFileName(path.basename(sourceName, path.extname(sourceName))) ||
+        (sanitizeFileName(path.basename(baseName, path.extname(baseName))) ||
           'file') + ext;
-      const mimeType =
-        mimeTypeByHref.get(relPath) || getMimeType(fileNameWithExt);
+      const mimeType = declaredMime || getMimeType(fileNameWithExt);
 
       const storageFilePath = `${getAttachmentFolderPath(
         AttachmentType.File,
@@ -289,7 +314,6 @@ export class ImportAttachmentService {
       return fresh;
     };
 
-    const pageDir = path.dirname(pageRelativePath);
     const $ = load(html);
 
     // image
@@ -321,10 +345,10 @@ export class ImportAttachmentService {
         continue;
       }
 
-      const { attachmentId, apiFilePath, fileNameWithExt, mimeType } =
+      const { attachmentId, apiFilePath, abs, fileNameWithExt, mimeType } =
         processFile(relPath);
 
-      // Confluence embeds videos with <ac:image>; emit a video node instead
+      // AltWiki: Confluence embeds videos with <ac:image>; emit a video node instead
       if (isVideoFile(fileNameWithExt, mimeType)) {
         const $video = $('<video>')
           .attr('src', apiFilePath)
@@ -336,13 +360,35 @@ export class ImportAttachmentService {
         continue;
       }
 
-      const width = $img.attr('width') ?? '100%';
+      let width = $img.attr('width');
+      const height = $img.attr('height');
       const align = $img.attr('data-align') ?? 'center';
+
+      if (!width) {
+        try {
+          const buf = await fs.readFile(abs);
+          const natural = imageDimensionsFromData(new Uint8Array(buf));
+          if (natural) {
+            width = height
+              ? String(
+                  Math.round((natural.width / natural.height) * Number(height)),
+                )
+              : String(natural.width);
+          }
+        } catch {
+          /* empty */
+        }
+
+        if (!width) {
+          width = '600';
+        }
+      }
 
       $img
         .attr('src', apiFilePath)
         .attr('data-attachment-id', attachmentId)
         .attr('width', width)
+        .attr('height', height)
         .attr('data-align', align);
 
       unwrapFromParagraph($, $img);
@@ -373,6 +419,28 @@ export class ImportAttachmentService {
         .attr('data-align', align);
 
       unwrapFromParagraph($, $vid);
+    }
+
+    // audio
+    for (const audEl of $('audio').toArray()) {
+      const $aud = $(audEl);
+      const src = cleanUrlString($aud.attr('src') ?? '')!;
+      if (!src || src.startsWith('http')) continue;
+
+      const relPath = resolveRelativeAttachmentPath(
+        src,
+        pageDir,
+        attachmentCandidates,
+      );
+      if (!relPath) continue;
+
+      const { attachmentId, apiFilePath } = processFile(relPath);
+
+      $aud
+        .attr('src', apiFilePath)
+        .attr('data-attachment-id', attachmentId);
+
+      unwrapFromParagraph($, $aud);
     }
 
     // <div data-type="attachment">
@@ -442,7 +510,20 @@ export class ImportAttachmentService {
       const { attachmentId, apiFilePath, fileNameWithExt, mimeType } =
         processFile(relPath);
 
-      if (isVideoFile(fileNameWithExt, mimeType)) {
+      // real (metadata) name, not the numeric archive path
+      const ext = path.extname(fileNameWithExt).toLowerCase();
+      const audioExtensions = new Set(['.mp3', '.wav', '.ogg', '.m4a', '.webm', '.flac', '.aac']);
+
+      if (ext === '.pdf') {
+        const $pdf = $('<div>')
+          .attr('data-type', 'pdf')
+          .attr('src', apiFilePath)
+          .attr('data-attachment-id', attachmentId)
+          .attr('width', '800')
+          .attr('height', '600');
+        $a.replaceWith($pdf);
+        unwrapFromParagraph($, $pdf);
+      } else if (isVideoFile(fileNameWithExt, mimeType)) {
         const $video = $('<video>')
           .attr('src', apiFilePath)
           .attr('data-attachment-id', attachmentId)
@@ -450,6 +531,12 @@ export class ImportAttachmentService {
           .attr('data-align', 'center');
         $a.replaceWith($video);
         unwrapFromParagraph($, $video);
+      } else if (audioExtensions.has(ext) || mimeType?.startsWith('audio/')) {
+        const $audio = $('<audio>')
+          .attr('src', apiFilePath)
+          .attr('data-attachment-id', attachmentId);
+        $a.replaceWith($audio);
+        unwrapFromParagraph($, $audio);
       } else {
         const confAliasName = $a.attr('data-linked-resource-default-alias');
         let attachmentName = fileNameWithExt;
@@ -484,7 +571,7 @@ export class ImportAttachmentService {
         const { attachmentId, apiFilePath, abs } = processFile(relPath);
         const fileName = path.basename(abs);
 
-        const width = $oldDiv.attr('data-width') || '100%';
+        const width = $oldDiv.attr('data-width') || '600';
         const align = $oldDiv.attr('data-align') || 'center';
 
         const $newDiv = $('<div>')
@@ -524,7 +611,7 @@ export class ImportAttachmentService {
         .attr('data-type', 'drawio')
         .attr('data-src', drawioSvg.apiFilePath)
         .attr('data-title', 'diagram')
-        .attr('data-width', '100%')
+        .attr('data-width', '600')
         .attr('data-align', 'center')
         .attr('data-attachment-id', drawioSvg.attachmentId);
 
@@ -546,25 +633,38 @@ export class ImportAttachmentService {
         continue;
       }
 
-      // Check if already processed (was referenced in HTML)
-      if (processed.has(href)) {
-        continue;
-      }
+      // Resolve the metadata href to the actual archive path
+      const resolvedHref = resolveRelativeAttachmentPath(
+        href,
+        pageDir,
+        attachmentCandidates,
+      );
+      if (!resolvedHref) continue;
 
-      // Skip if the file doesn't exist
-      if (!attachmentCandidates.has(href)) {
+      // Check if already processed (was referenced in HTML).
+      // Inline elements may have been processed under an alias key (original
+      // filename) rather than the numeric archive path, so also check whether
+      // the underlying absolute file path has already been uploaded.
+      const absPath = attachmentCandidates.get(resolvedHref);
+      const alreadyProcessed =
+        processed.has(resolvedHref) ||
+        (absPath &&
+          Array.from(processed.values()).some(
+            (entry) => entry.abs === absPath,
+          ));
+      if (alreadyProcessed) {
         continue;
       }
 
       // This attachment was in the list but not referenced in HTML - add it
-      const processedFile = processFile(href);
+      const processedFile = processFile(resolvedHref);
       const { attachmentId, apiFilePath } = processedFile;
       const mime =
         mimeType && mimeType !== 'application/octet-stream'
           ? mimeType
           : processedFile.mimeType;
 
-      if (isVideoFile(fileName, mime)) {
+      if (isVideoFile(processedFile.fileNameWithExt, mime)) {
         const $video = $('<video>')
           .attr('src', apiFilePath)
           .attr('data-attachment-id', attachmentId)
@@ -609,7 +709,9 @@ export class ImportAttachmentService {
 
     // Post-process DOM elements to add file sizes after uploads complete
     // This avoids blocking file operations during initial DOM processing
-    const elementsNeedingSize = $('[data-attachment-id]:not([data-size])');
+    const elementsNeedingSize = $(
+      '[data-attachment-id]:not([data-attachment-size]):not([data-size])',
+    );
     for (const element of elementsNeedingSize.toArray()) {
       const $el = $(element);
       const attachmentId = $el.attr('data-attachment-id');
@@ -623,7 +725,14 @@ export class ImportAttachmentService {
       if (processedEntry) {
         try {
           const stat = await fs.stat(processedEntry.abs);
-          $el.attr('data-size', stat.size.toString());
+          const sizeStr = stat.size.toString();
+          const tagName = $el.prop('tagName')?.toLowerCase();
+          // audio and pdf nodes use data-size, attachment nodes use data-attachment-size
+          if (tagName === 'audio' || $el.attr('data-type') === 'pdf') {
+            $el.attr('data-size', sizeStr);
+          } else {
+            $el.attr('data-attachment-size', sizeStr);
+          }
         } catch (error) {
           this.logger.debug(
             `Could not get size for ${processedEntry.abs}:`,

@@ -160,3 +160,11 @@
   padding: var(--mantine-spacing-xl);
   text-align: center;
 }
+
+.favorites {
+  margin-bottom: rem(24px);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    margin-bottom: rem(16px);
+  }
+}

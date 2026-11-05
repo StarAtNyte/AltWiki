@@ -21,9 +21,9 @@ import MemberActionMenu from "@/features/workspace/components/members/components
 
 export default function WorkspaceMembersTable() {
   const { t } = useTranslation();
-  const { search, page, setPage, handleSearch } = usePaginateAndSearch();
+  const { search, cursor, goNext, goPrev, handleSearch } = usePaginateAndSearch();
   const { data, isLoading } = useWorkspaceMembersQuery({
-    page,
+    cursor,
     limit: 100,
     query: search,
   });
@@ -61,6 +61,7 @@ export default function WorkspaceMembersTable() {
               <Table.Th>{t("User")}</Table.Th>
               <Table.Th>{t("Status")}</Table.Th>
               <Table.Th>{t("Role")}</Table.Th>
+              <Table.Th aria-label={t("Action")} />
             </Table.Tr>
           </Table.Thead>
 
@@ -85,20 +86,35 @@ export default function WorkspaceMembersTable() {
                     </Group>
                   </Table.Td>
                   <Table.Td>
-                    <Badge variant="light">{t("Active")}</Badge>
+                    {user.deactivatedAt ? (
+                      <Badge variant="light" color="orange">
+                        {t("Deactivated")}
+                      </Badge>
+                    ) : (
+                      <Badge variant="light">{t("Active")}</Badge>
+                    )}
                   </Table.Td>
                   <Table.Td>
-                    <RoleSelectMenu
-                      roles={assignableUserRoles}
-                      roleName={getUserRoleLabel(user.role)}
-                      onChange={(newRole) =>
-                        handleRoleChange(user.id, user.role, newRole)
-                      }
-                      disabled={!isAdmin}
-                    />
+                    {isAdmin ? (
+                      <RoleSelectMenu
+                        roles={assignableUserRoles}
+                        roleName={getUserRoleLabel(user.role)}
+                        onChange={(newRole) =>
+                          handleRoleChange(user.id, user.role, newRole)
+                        }
+                      />
+                    ) : (
+                      <Text fz="sm">{t(getUserRoleLabel(user.role))}</Text>
+                    )}
                   </Table.Td>
                   <Table.Td>
-                    {isAdmin && <MemberActionMenu userId={user.id} />}
+                    {isAdmin && (
+                      <MemberActionMenu
+                        userId={user.id}
+                        name={user.name}
+                        deactivatedAt={user.deactivatedAt}
+                      />
+                    )}
                   </Table.Td>
                 </Table.Tr>
               ))
@@ -111,10 +127,10 @@ export default function WorkspaceMembersTable() {
 
       {data?.items.length > 0 && (
         <Paginate
-          currentPage={page}
-          hasPrevPage={data?.meta.hasPrevPage}
-          hasNextPage={data?.meta.hasNextPage}
-          onPageChange={setPage}
+          hasPrevPage={data?.meta?.hasPrevPage}
+          hasNextPage={data?.meta?.hasNextPage}
+          onNext={() => goNext(data?.meta?.nextCursor)}
+          onPrev={goPrev}
         />
       )}
     </>

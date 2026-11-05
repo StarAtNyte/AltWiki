@@ -2,21 +2,32 @@ import { marked } from "marked";
 import { calloutExtension } from "./callout.marked";
 import { mathBlockExtension } from "./math-block.marked";
 import { mathInlineExtension } from "./math-inline.marked";
+import {
+  footnoteDefExtension,
+  footnoteRefExtension,
+  renderFootnotesList,
+  resetFootnotes,
+} from "./footnotes.marked";
 
 marked.use({
   renderer: {
-    // @ts-ignore
-    list(body: string, isOrdered: boolean, start: number) {
-      if (isOrdered) {
-        const startAttr = start !== 1 ? ` start="${start}"` : "";
-        return `<ol ${startAttr}>\n${body}</ol>\n`;
+    list({ ordered, start, items }) {
+      let body = "";
+      for (const item of items) {
+        body += this.listitem(item);
       }
 
-      const dataType = body.includes(`<input`) ? ' data-type="taskList"' : "";
+      if (ordered) {
+        const startAttr = start !== 1 ? ` start="${start}"` : "";
+        return `<ol${startAttr}>\n${body}</ol>\n`;
+      }
+
+      const isTaskList = items.some((item) => item.task);
+      const dataType = isTaskList ? ' data-type="taskList"' : "";
       return `<ul${dataType}>\n${body}</ul>\n`;
     },
-    // @ts-ignore
-    listitem({ text, raw, task: isTask, checked: isChecked }): string {
+    listitem({ tokens, task: isTask, checked: isChecked }) {
+      const text = this.parser.parse(tokens);
       if (!isTask) {
         return `<li>${text}</li>\n`;
       }
@@ -29,8 +40,16 @@ marked.use({
 });
 
 marked.use({
-  extensions: [calloutExtension, mathBlockExtension, mathInlineExtension],
+  extensions: [
+    calloutExtension,
+    mathBlockExtension,
+    mathInlineExtension,
+    footnoteDefExtension,
+    footnoteRefExtension,
+  ],
 });
+
+marked.setOptions({ breaks: true });
 
 export function markdownToHtml(
   markdownInput: string,
@@ -41,8 +60,12 @@ export function markdownToHtml(
     .replace(YAML_FONT_MATTER_REGEX, "")
     .trimStart();
 
-  return marked
-    .options({ breaks: true })
+  resetFootnotes();
+  // marked always closes fenced code with a newline that the editor keeps as
+  // an empty trailing line inside the code block.
+  const html = marked
     .parse(markdown)
-    .toString();
+    .toString()
+    .replace(/\n<\/code><\/pre>/g, "</code></pre>");
+  return html + renderFootnotesList();
 }

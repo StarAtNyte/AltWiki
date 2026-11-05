@@ -1,45 +1,18 @@
 <div align="center">
-    <h1><b>AltWiki</b></h1>
+    <h1><b>Docmost</b></h1>
     <p>
         Open-source collaborative wiki and documentation software.
+        <br />
+        <a href="https://docmost.com"><strong>Website</strong></a> | 
+        <a href="https://docmost.com/docs"><strong>Documentation</strong></a> |
+        <a href="https://twitter.com/DocmostHQ"><strong>Twitter / X</strong></a>
     </p>
 </div>
 <br />
 
 ## Getting started
 
-See the Local Development Setup section below to get started with AltWiki.
-
-## Local Development Setup
-
-1. Copy `.env.example` to `.env` and configure your settings.
-
-2. **Database Setup** - Choose one option:
-
-   **Option A: Use Docker PostgreSQL**
-   ```bash
-   # Stop local PostgreSQL if running
-   sudo systemctl stop postgresql
-   
-   # Start containers (resets data)
-   docker compose down -v && docker compose up -d
-   ```
-
-   **Option B: Use local PostgreSQL**
-   ```bash
-   sudo -u postgres psql -c "CREATE USER docmost WITH PASSWORD 'atpass';"
-   sudo -u postgres psql -c "CREATE DATABASE docmost OWNER docmost;"
-   ```
-
-3. Run migrations:
-   ```bash
-   pnpm nx run server:migration:latest
-   ```
-
-4. Start the development server:
-   ```bash
-   pnpm nx run server:dev
-   ```
+To get started with Docmost, please refer to our [documentation](https://docmost.com/docs) or try our [cloud version](https://docmost.com/pricing) .
 
 ## Features
 
@@ -63,11 +36,27 @@ See the Local Development Setup section below to get started with AltWiki.
 </p>
 
 ### License
-AltWiki core is licensed under the open-source AGPL 3.0 license.  
+Docmost core is licensed under the open-source AGPL 3.0 license.  
 Enterprise features are available under an enterprise license (Enterprise Edition).  
 
-All files in the following directories are licensed under the AltWiki Enterprise license defined in `packages/ee/License`.
+All files in the following directories are licensed under the Docmost Enterprise license defined in `packages/ee/License`.
   - apps/server/src/ee
   - apps/client/src/ee
   - packages/ee
+
+### Contributing
+
+See the [development documentation](https://docmost.com/docs/self-hosting/development)
+
+## Thanks
+Special thanks to;
+
+<img width="100" alt="Crowdin" src="https://github.com/user-attachments/assets/a6c3d352-e41b-448d-b6cd-3fbca3109f07" />
+
+[Crowdin](https://crowdin.com/) for providing access to their localization platform.
+
+
+<img width="48" alt="Algolia-mark-square-white" src="https://github.com/user-attachments/assets/6ccad04a-9589-4965-b6a1-d5cb1f4f9e94" />
+
+[Algolia](https://www.algolia.com/) for providing full-text search to the docs.
 

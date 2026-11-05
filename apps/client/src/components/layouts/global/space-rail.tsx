@@ -6,12 +6,18 @@ import {
   IconHome,
   IconLayoutGrid,
   IconSettings,
+  IconSparkles,
+  IconStar,
+  IconTemplate,
 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import { useDisclosure } from "@mantine/hooks";
-import { useSetAtom } from "jotai";
-import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useHasFeature } from "@/ee/hooks/use-feature";
+import { Feature } from "@/ee/features";
+import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { useAllSpacesQuery } from "@/features/space/queries/space-query.ts";
 import { partitionArchivedSpaces } from "@/features/space/utils/archived-space.ts";
 import { SpaceAvatar } from "@/components/ui/space-avatar.tsx";
 import { getSpaceUrl } from "@/lib/config.ts";
@@ -60,11 +66,15 @@ export function SpaceRail({ className }: { className?: string }) {
   const navigate = useNavigate();
   const setMobileOpened = useSetAtom(mobileSidebarAtom);
   const [archiveOpened, archive] = useDisclosure(false);
-  const { data } = useGetSpacesQuery({ page: 1, limit: 100 });
+  const { data } = useAllSpacesQuery();
+  const workspace = useAtomValue(workspaceAtom);
+  const aiChatEnabled = workspace?.settings?.ai?.chat === true;
+  // Workspace templates are a licensed feature: hidden without a licence.
+  const hasTemplates = useHasFeature(Feature.TEMPLATES);
 
   const pathname = location.pathname;
   const currentSlug = activeSpaceSlug(pathname);
-  const mine = (data?.items ?? []).filter(
+  const mine = (data ?? []).filter(
     (space: ISpace) => space.isMember !== false,
   );
   const { active, archived } = partitionArchivedSpaces(mine);
@@ -123,6 +133,40 @@ export function SpaceRail({ className }: { className?: string }) {
             <IconLayoutGrid size={20} stroke={1.75} />
           </span>
         </RailItem>
+        <RailItem
+          label={t("Favorites")}
+          to="/favorites"
+          active={pathname.startsWith("/favorites")}
+          onNavigate={closeMobile}
+        >
+          <span className={classes.glyph}>
+            <IconStar size={20} stroke={1.75} />
+          </span>
+        </RailItem>
+        {hasTemplates && (
+          <RailItem
+            label={t("Templates")}
+            to="/templates"
+            active={pathname.startsWith("/templates")}
+            onNavigate={closeMobile}
+          >
+            <span className={classes.glyph}>
+              <IconTemplate size={20} stroke={1.75} />
+            </span>
+          </RailItem>
+        )}
+        {aiChatEnabled && (
+          <RailItem
+            label={t("AI Chat")}
+            to="/ai"
+            active={pathname.startsWith("/ai")}
+            onNavigate={closeMobile}
+          >
+            <span className={classes.glyph}>
+              <IconSparkles size={20} stroke={1.75} />
+            </span>
+          </RailItem>
+        )}
       </div>
 
       <div className={classes.divider} />

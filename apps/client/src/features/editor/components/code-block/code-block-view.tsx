@@ -1,13 +1,14 @@
 import { NodeViewContent, NodeViewProps, NodeViewWrapper } from "@tiptap/react";
-import { ActionIcon, CopyButton, Group, Select, Tooltip } from "@mantine/core";
+import { ActionIcon, Group, Select, Tooltip } from "@mantine/core";
+import { CopyButton } from "@/components/common/copy-button";
 import { useEffect, useState } from "react";
 import { IconCheck, IconCopy } from "@tabler/icons-react";
 import classes from "./code-block.module.css";
-import React from "react";
 import { Suspense } from "react";
 import { useTranslation } from "react-i18next";
+import { lazyWithPrefetch } from "@/lib/lazy-prefetch.ts";
 
-const MermaidView = React.lazy(
+const MermaidView = lazyWithPrefetch(
   () => import("@/features/editor/components/code-block/mermaid-view.tsx"),
 );
 

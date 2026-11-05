@@ -1,0 +1,15 @@
+/* Glass AI prompt under the home greeting (only when AI chat is enabled). */
+.wrapper {
+  margin-bottom: rem(20px);
+}
+
+.inputContainer {
+  width: 100%;
+  padding: rem(6px);
+  border-radius: rem(18px);
+  background: var(--app-glass-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-glass-shadow);
+}

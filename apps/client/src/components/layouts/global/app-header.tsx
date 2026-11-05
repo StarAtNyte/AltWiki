@@ -1,8 +1,10 @@
-import { Badge, Group, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Group, Text, Tooltip } from "@mantine/core";
 import classes from "./app-header.module.css";
 import React from "react";
 import TopMenu from "@/components/layouts/global/top-menu.tsx";
 import { Link, useLocation } from "react-router-dom";
+import { IconSparkles } from "@tabler/icons-react";
+import useToggleAside from "@/hooks/use-toggle-aside.tsx";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { useAtom } from "jotai";
 import {
@@ -18,10 +20,9 @@ import {
   SearchControl,
   SearchMobileControl,
 } from "@/features/search/components/search-control.tsx";
-import {
-  searchSpotlight,
-  shareSearchSpotlight,
-} from "@/features/search/constants.ts";
+import { searchSpotlight } from "@/features/search/constants.ts";
+import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
+import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 
 export function AppHeader() {
   const { t } = useTranslation();
@@ -31,11 +32,32 @@ export function AppHeader() {
   const [desktopOpened] = useAtom(desktopSidebarAtom);
   const toggleDesktop = useToggleSidebar(desktopSidebarAtom);
   const { isTrial, trialDaysLeft } = useTrial();
+  const toggleAside = useToggleAside();
+  const [workspace] = useAtom(workspaceAtom);
+  const aiChatEnabled = workspace?.settings?.ai?.chat === true;
 
   const location = useLocation();
-  const isHomeRoute = location.pathname.startsWith("/home");
-  const isSpacesRoute = location.pathname === "/spaces";
-  const hideSidebar = isHomeRoute || isSpacesRoute;
+  const pathname = location.pathname;
+  const isHomeRoute = pathname.startsWith("/home");
+  const isSpacesRoute = pathname === "/spaces";
+  const isPageRoute = pathname.includes("/p/");
+  // Only space, settings and AI chat routes have a contextual sidebar to
+  // collapse (see global-app-shell.tsx).
+  const hideSidebar =
+    !pathname.startsWith("/s/") &&
+    !pathname.startsWith("/settings") &&
+    !pathname.startsWith("/ai");
+
+  const openAiChat = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+      return;
+    }
+    // On a page the chat opens in the aside, next to the document.
+    if (isPageRoute) {
+      e.preventDefault();
+      toggleAside("chat");
+    }
+  };
 
   return (
     <>
@@ -97,6 +119,21 @@ export function AppHeader() {
                 : `${trialDaysLeft} days left`}
             </Badge>
           )}
+          {aiChatEnabled && (
+            <Tooltip label={t("AI Chat")} openDelay={250} withArrow>
+              <ActionIcon
+                component={Link}
+                to="/ai"
+                variant="subtle"
+                color="gray"
+                aria-label={t("AI Chat")}
+                onClick={openAiChat}
+              >
+                <IconSparkles size={18} stroke={1.75} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <NotificationPopover />
           <TopMenu />
         </Group>
       </div>

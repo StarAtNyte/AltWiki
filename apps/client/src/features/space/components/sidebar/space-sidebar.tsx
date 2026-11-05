@@ -13,6 +13,8 @@ import {
   IconCheck,
   IconChevronDown,
   IconDots,
+  IconEye,
+  IconEyeOff,
   IconFileExport,
   IconFilePlus,
   IconHome,
@@ -21,6 +23,9 @@ import {
   IconPlus,
   IconSelector,
   IconSettings,
+  IconStar,
+  IconStarFilled,
+  IconWorld,
   IconPhotoEdit,
   IconTemplate,
   IconTrash,
@@ -28,13 +33,33 @@ import {
 import classes from "./space-sidebar.module.css";
 import React, { useCallback } from "react";
 import { useAtom } from "jotai";
-import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
-import { selectedPageIdsAtom, selectionModeAtom, sortOrderAtom, SortOrder } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import {
+  selectedPageIdsAtom,
+  selectionModeAtom,
+  sortOrderAtom,
+  SortOrder,
+  treeDataAtom,
+} from "@/features/page/tree/atoms/tree-data-atom.ts";
+import { useTreeMutation } from "@/features/page/tree/hooks/use-tree-mutation.ts";
+import { SpaceTreeNode } from "@/features/page/tree/types";
+import {
+  useSpaceWatchStatusQuery,
+  useWatchSpaceMutation,
+  useUnwatchSpaceMutation,
+} from "@/features/space/queries/space-watcher-query.ts";
+import {
+  useFavoriteIds,
+  useAddFavoriteMutation,
+  useRemoveFavoriteMutation,
+} from "@/features/favorite/queries/favorite-query";
+import { useHasFeature } from "@/ee/hooks/use-feature";
+import { Feature } from "@/ee/features";
+import { ErrorBoundary } from "react-error-boundary";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useDisclosure } from "@mantine/hooks";
 import SpaceSettingsModal from "@/features/space/components/settings-modal.tsx";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
-import { getSpaceUrl } from "@/lib/config.ts";
+import { getSpaceUrl, isBetaPublicSpaces } from "@/lib/config.ts";
 import SpaceTree from "@/features/page/tree/components/space-tree.tsx";
 import BulkActionsBar from "@/features/page/tree/components/bulk-actions-bar.tsx";
 import { useSpaceAbility } from "@/features/space/permissions/use-space-ability.ts";
@@ -68,10 +93,22 @@ const TemplatePickerModal = lazy(() =>
     (m) => ({ default: m.TemplatePickerModal }),
   ),
 );
+// Enterprise workspace templates (licensed feature only).
+const WorkspaceTemplatePickerModal = lazy(
+  () => import("@/ee/template/components/template-picker-modal"),
+);
+
+function collectNodeIds(nodes: SpaceTreeNode[], into: Set<string>) {
+  for (const node of nodes) {
+    into.add(node.id);
+    if (node.children?.length) collectNodeIds(node.children, into);
+  }
+  return into;
+}
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
-  const [tree] = useAtom(treeApiAtom);
+  const [treeData] = useAtom(treeDataAtom);
   const [selectedPageIds, setSelectedPageIds] = useAtom(selectedPageIdsAtom);
   const [selectionMode, setSelectionMode] = useAtom(selectionModeAtom);
   const location = useLocation();
@@ -81,6 +118,11 @@ export function SpaceSidebar() {
     useDisclosure(false);
   const [templateOpened, { open: openTemplates, close: closeTemplates }] =
     useDisclosure(false);
+  const [
+    workspaceTemplatesOpened,
+    { open: openWorkspaceTemplates, close: closeWorkspaceTemplates },
+  ] = useDisclosure(false);
+  const hasWorkspaceTemplates = useHasFeature(Feature.TEMPLATES);
   const githubDocsMounted = useMountedOnce(githubDocsOpened);
   const templateMounted = useMountedOnce(templateOpened);
   const { createFromTemplate } = useCreateFromTemplate();
@@ -92,33 +134,28 @@ export function SpaceSidebar() {
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+  const { handleCreate } = useTreeMutation(space?.id ?? "");
 
   const clearSelection = useCallback(() => {
     setSelectedPageIds(new Set());
     setSelectionMode(false);
-    tree?.deselectAll();
-  }, [setSelectedPageIds, setSelectionMode, tree]);
+  }, [setSelectedPageIds, setSelectionMode]);
 
   const enableSelectionMode = useCallback(() => {
     setSelectionMode(true);
   }, [setSelectionMode]);
 
   const selectAllVisiblePages = useCallback(() => {
-    if (tree) {
-      const visibleIds = new Set<string>();
-      tree.visibleNodes.forEach((node) => {
-        visibleIds.add(node.id);
-      });
-      setSelectedPageIds(visibleIds);
-    }
-  }, [tree, setSelectedPageIds]);
+    // Every page loaded into the tree (expanded branches included).
+    setSelectedPageIds(collectNodeIds(treeData, new Set<string>()));
+  }, [treeData, setSelectedPageIds]);
 
   if (!space) {
     return <></>;
   }
 
   function handleCreatePage() {
-    tree?.create({ parentId: null, type: "internal", index: 0 });
+    handleCreate(null);
   }
 
   const canManagePages = spaceAbility.can(
@@ -150,6 +187,7 @@ export function SpaceSidebar() {
             spaceLogo={space.logo}
             spaceSlug={space.slug}
             isOverview={isOverview}
+            isPublished={isBetaPublicSpaces() && !!space.isPublished}
             canManage={canManagePages}
             canManageSettings={canManageSettings}
             onSpaceSettings={openSettings}
@@ -190,6 +228,14 @@ export function SpaceSidebar() {
                 >
                   {t("From template")}
                 </Menu.Item>
+                {hasWorkspaceTemplates && (
+                  <Menu.Item
+                    leftSection={<IconTemplate size={16} />}
+                    onClick={openWorkspaceTemplates}
+                  >
+                    {t("Workspace template")}
+                  </Menu.Item>
+                )}
                 <Menu.Item
                   leftSection={<IconBrandGithub size={16} />}
                   onClick={openGithubDocs}
@@ -276,6 +322,18 @@ export function SpaceSidebar() {
       />
       )}
       </Suspense>
+
+      {hasWorkspaceTemplates && workspaceTemplatesOpened && (
+        <ErrorBoundary fallbackRender={() => null}>
+          <Suspense fallback={null}>
+            <WorkspaceTemplatePickerModal
+              opened={workspaceTemplatesOpened}
+              onClose={closeWorkspaceTemplates}
+              initialSpaceId={space.id}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      )}
     </>
   );
 }
@@ -286,6 +344,7 @@ interface SpaceHeaderMenuProps {
   spaceLogo?: string;
   spaceSlug: string;
   isOverview: boolean;
+  isPublished?: boolean;
   canManage: boolean;
   canManageSettings: boolean;
   onSpaceSettings: () => void;
@@ -298,6 +357,7 @@ function SpaceHeaderMenu({
   spaceLogo,
   spaceSlug,
   isOverview,
+  isPublished,
   canManage,
   canManageSettings,
   onSpaceSettings,
@@ -312,18 +372,55 @@ function SpaceHeaderMenu({
   const [iconOpened, { open: openIconPicker, close: closeIconPicker }] =
     useDisclosure(false);
 
+  const { data: watchStatus } = useSpaceWatchStatusQuery(spaceId);
+  const watchMutation = useWatchSpaceMutation();
+  const unwatchMutation = useUnwatchSpaceMutation();
+  const isWatching = watchStatus?.watching ?? false;
+
+  const favoriteIds = useFavoriteIds("space");
+  const addFavoriteMutation = useAddFavoriteMutation();
+  const removeFavoriteMutation = useRemoveFavoriteMutation();
+  const isFavorited = favoriteIds.has(spaceId);
+
+  const handleToggleFavorite = () => {
+    const params = { type: "space" as const, spaceId };
+    if (isFavorited) {
+      removeFavoriteMutation.mutate(params);
+    } else {
+      addFavoriteMutation.mutate(params);
+    }
+  };
+
+  const handleToggleWatch = () => {
+    if (isWatching) {
+      unwatchMutation.mutate(spaceId);
+    } else {
+      watchMutation.mutate(spaceId);
+    }
+  };
+
   return (
     <>
       <Menu width={240} position="bottom-start" offset={4}>
         <Menu.Target>
           <UnstyledButton
             className={classes.spaceButton}
-                        aria-label={t("Space menu")}
+            aria-label={t("Space menu")}
           >
             <SpaceAvatar name={spaceName} logo={spaceLogo} size={24} radius={6} />
             <Text className={classes.spaceName} lineClamp={1}>
               {spaceName}
             </Text>
+            {isPublished && (
+              <Tooltip label={t("This space is public")}>
+                <IconWorld
+                  size={14}
+                  aria-label={t("This space is public")}
+                  className={classes.spaceChevron}
+                  style={{ flexShrink: 0 }}
+                />
+              </Tooltip>
+            )}
             <IconSelector size={15} className={classes.spaceChevron} />
           </UnstyledButton>
         </Menu.Target>
@@ -338,6 +435,30 @@ function SpaceHeaderMenu({
           >
             {t("Overview")}
           </Menu.Item>
+          <Menu.Item
+            onClick={handleToggleFavorite}
+            leftSection={
+              isFavorited ? (
+                <IconStarFilled
+                  size={16}
+                  color="var(--mantine-color-yellow-filled)"
+                />
+              ) : (
+                <IconStar size={16} />
+              )
+            }
+          >
+            {isFavorited ? t("Remove from favorites") : t("Add to favorites")}
+          </Menu.Item>
+          <Menu.Item
+            onClick={handleToggleWatch}
+            leftSection={
+              isWatching ? <IconEyeOff size={16} /> : <IconEye size={16} />
+            }
+          >
+            {isWatching ? t("Stop watching space") : t("Watch space")}
+          </Menu.Item>
+          <Menu.Divider />
           <Menu.Item
             onClick={onSpaceSettings}
             leftSection={<IconSettings size={16} />}

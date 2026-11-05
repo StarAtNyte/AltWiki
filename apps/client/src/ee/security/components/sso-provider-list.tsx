@@ -43,7 +43,7 @@ export default function SsoProviderList() {
     return null;
   }
 
-  if (data?.length === 0) {
+  if (data?.items.length === 0) {
     return <Text c="dimmed">{t("No SSO providers found.")}</Text>;
   }
 
@@ -69,8 +69,8 @@ export default function SsoProviderList() {
   return (
     <>
       <Card shadow="sm" radius="sm">
-        <Table.ScrollContainer minWidth={600}>
-          <Table verticalSpacing="sm">
+        <Table.ScrollContainer minWidth={600} maxHeight={400}>
+          <Table verticalSpacing="sm" stickyHeader>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>{t("Name")}</Table.Th>
@@ -81,7 +81,7 @@ export default function SsoProviderList() {
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {data
+              {data?.items
                 .sort((a, b) => {
                   const enabledDiff = Number(b.isEnabled) - Number(a.isEnabled);
                   if (enabledDiff !== 0) return enabledDiff;
@@ -104,7 +104,11 @@ export default function SsoProviderList() {
                       </Group>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={"gray"} variant="light" style={{ whiteSpace: "nowrap" }}>
+                      <Badge
+                        color={"gray"}
+                        variant="light"
+                        style={{ whiteSpace: "nowrap" }}
+                      >
                         {provider.type.toUpperCase()}
                       </Badge>
                     </Table.Td>
@@ -134,41 +138,48 @@ export default function SsoProviderList() {
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
-                      <ActionIcon
-                        variant="subtle"
-                        color="gray"
-                        onClick={() => handleEdit(provider)}
-                      >
-                        <IconPencil size={16} />
-                      </ActionIcon>
-                      <Menu
-                        transitionProps={{ transition: "pop" }}
-                        withArrow
-                        position="bottom-end"
-                        withinPortal
-                      >
-                        <Menu.Target>
-                          <ActionIcon variant="subtle" color="gray">
-                            <IconDots size={16} />
-                          </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Item
-                            onClick={() => handleEdit(provider)}
-                            leftSection={<IconPencil size={16} />}
-                          >
-                            {t("Edit")}
-                          </Menu.Item>
-                          <Menu.Item
-                            onClick={() => openDeleteModal(provider.id)}
-                            leftSection={<IconTrash size={16} />}
-                            color="red"
-                            disabled={provider.type === SSO_PROVIDER.GOOGLE}
-                          >
-                            {t("Delete")}
-                          </Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
+                        <ActionIcon
+                          variant="subtle"
+                          color="gray"
+                          aria-label={t("Edit {{name}}", { name: provider.name })}
+                          onClick={() => handleEdit(provider)}
+                        >
+                          <IconPencil size={16} />
+                        </ActionIcon>
+                        <Menu
+                          transitionProps={{ transition: "pop" }}
+                          withArrow
+                          position="bottom-end"
+                          withinPortal
+                        >
+                          <Menu.Target>
+                            <ActionIcon
+                              variant="subtle"
+                              color="gray"
+                              aria-label={t("More actions for {{name}}", {
+                                name: provider.name,
+                              })}
+                            >
+                              <IconDots size={16} />
+                            </ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            <Menu.Item
+                              onClick={() => handleEdit(provider)}
+                              leftSection={<IconPencil size={16} />}
+                            >
+                              {t("Edit")}
+                            </Menu.Item>
+                            <Menu.Item
+                              onClick={() => openDeleteModal(provider.id)}
+                              leftSection={<IconTrash size={16} />}
+                              color="red"
+                              disabled={provider.type === SSO_PROVIDER.GOOGLE}
+                            >
+                              {t("Delete")}
+                            </Menu.Item>
+                          </Menu.Dropdown>
+                        </Menu>
                       </Group>
                     </Table.Td>
                   </Table.Tr>

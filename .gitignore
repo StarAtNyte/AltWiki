@@ -4,7 +4,7 @@
 data
 !apps/client/src/features/templates/data/
 # compiled output
-/dist
+dist
 /node_modules
 
 # Logs
@@ -42,4 +42,3 @@ lerna-debug.log*
 .nx
 .nx/installation
 .nx/cache
-.superdesign/tmp/

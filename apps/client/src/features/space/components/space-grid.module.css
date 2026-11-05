@@ -92,3 +92,25 @@
   padding: var(--mantine-spacing-xl);
   text-align: center;
 }
+
+/* Favourite star: shown on hover / focus, always when starred. */
+.cardActions {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(2px);
+}
+
+.starButton {
+  display: inline-flex;
+  opacity: 0;
+  transition: opacity var(--app-transition-fast);
+
+  &[data-favorited] {
+    opacity: 1;
+  }
+}
+
+.card:hover .starButton,
+.card:focus-within .starButton {
+  opacity: 1;
+}

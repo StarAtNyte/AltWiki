@@ -75,6 +75,10 @@ export class EnvironmentService {
     return new Date(Date.now() + msUntilExpiry);
   }
 
+  getGotenbergUrl(): string | undefined {
+    return this.configService.get<string>('GOTENBERG_URL');
+  }
+
   getStorageDriver(): string {
     return this.configService.get<string>('STORAGE_DRIVER', 'local');
   }
@@ -108,11 +112,34 @@ export class EnvironmentService {
   }
 
   getAwsS3ForcePathStyle(): boolean {
-    return this.configService.get<boolean>('AWS_S3_FORCE_PATH_STYLE');
+    const forcePathStyle = this.configService
+      .get<string>('AWS_S3_FORCE_PATH_STYLE', 'false')
+      .toLowerCase();
+    return forcePathStyle === 'true';
   }
 
   getAwsS3Url(): string {
     return this.configService.get<string>('AWS_S3_URL');
+  }
+
+  getAzureStorageAccountName(): string {
+    return this.configService.get<string>('AZURE_STORAGE_ACCOUNT_NAME');
+  }
+
+  getAzureStorageContainer(): string {
+    return this.configService.get<string>('AZURE_STORAGE_CONTAINER');
+  }
+
+  getAzureStorageAccountKey(): string {
+    return this.configService.get<string>('AZURE_STORAGE_ACCOUNT_KEY');
+  }
+
+  getAzureStorageEndpoint(): string {
+    return this.configService.get<string>('AZURE_STORAGE_ENDPOINT');
+  }
+
+  getAzureStorageUrl(): string {
+    return this.configService.get<string>('AZURE_STORAGE_URL');
   }
 
   getMailDriver(): string {
@@ -125,6 +152,17 @@ export class EnvironmentService {
 
   getMailFromName(): string {
     return this.configService.get<string>('MAIL_FROM_NAME', 'Docmost');
+  }
+
+  getMailBlockedRecipientDomains(): string[] {
+    const raw = this.configService.get<string>(
+      'MAIL_BLOCKED_RECIPIENT_DOMAINS',
+      '',
+    );
+    return raw
+      .split(',')
+      .map((d) => d.trim().toLowerCase())
+      .filter(Boolean);
   }
 
   getSmtpHost(): string {
@@ -210,6 +248,13 @@ export class EnvironmentService {
     return disable === 'true';
   }
 
+  isBetaPublicSpaces(): boolean {
+    const enabled = this.configService
+      .get<string>('BETA_PUBLIC_SPACES', 'false')
+      .toLowerCase();
+    return enabled === 'true';
+  }
+
   getPostHogHost(): string {
     return this.configService.get<string>('POSTHOG_HOST');
   }
@@ -252,10 +297,48 @@ export class EnvironmentService {
     return this.configService.get<string>('AI_COMPLETION_MODEL');
   }
 
+  getAiChatModel(): string {
+    return (
+      this.configService.get<string>('AI_CHAT_MODEL') ||
+      this.configService.get<string>('AI_COMPLETION_MODEL')
+    );
+  }
+
   getAiEmbeddingDimension(): number {
     return parseInt(
       this.configService.get<string>('AI_EMBEDDING_DIMENSION'),
       10,
+    );
+  }
+
+  getAiEmbeddingSupportsMrl(): boolean | undefined {
+    const val = this.configService.get<string>('AI_EMBEDDING_SUPPORTS_MRL');
+    if (val === undefined || val === null || val === '') return undefined;
+    return val === 'true';
+  }
+
+  getAiVectorDriver(): string {
+    return this.configService
+      .get<string>('AI_VECTOR_DRIVER', 'pgvector')
+      .toLowerCase();
+  }
+
+  getTurbopufferApiKey(): string {
+    return this.configService.get<string>('TURBOPUFFER_API_KEY');
+  }
+
+  getTurbopufferRegion(): string {
+    return this.configService.get<string>('TURBOPUFFER_REGION');
+  }
+
+  getTurbopufferBaseUrl(): string {
+    return this.configService.get<string>('TURBOPUFFER_BASE_URL');
+  }
+
+  getTurbopufferNamespacePrefix(): string {
+    return this.configService.get<string>(
+      'TURBOPUFFER_NAMESPACE_PREFIX',
+      'docmost',
     );
   }
 
@@ -276,5 +359,45 @@ export class EnvironmentService {
       'OLLAMA_API_URL',
       'http://localhost:11434',
     );
+  }
+
+  getEventStoreDriver(): string {
+    return this.configService
+      .get<string>('EVENT_STORE_DRIVER', 'postgres')
+      .toLowerCase();
+  }
+
+  getClickHouseUrl(): string {
+    return this.configService.get<string>('CLICKHOUSE_URL');
+  }
+
+  getSamlDisableRequestedAuthnContext(): boolean {
+    const disabled = this.configService
+      .get<string>('SAML_DISABLE_REQUESTED_AUTHN_CONTEXT', 'false')
+      .toLowerCase();
+    return disabled === 'true';
+  }
+
+  isIframeEmbedAllowed(): boolean {
+    const allowed = this.configService
+      .get<string>('IFRAME_EMBED_ALLOWED', 'false')
+      .toLowerCase();
+    return allowed === 'true';
+  }
+
+  getIframeAllowedOrigins(): string[] {
+    const raw = this.configService.get<string>('IFRAME_ALLOWED_ORIGINS', '');
+    return raw
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean);
+  }
+
+  getSlackSigningSecret(): string | undefined {
+    return this.configService.get<string>('INTEGRATION_SLACK_SIGNING_SECRET');
+  }
+
+  getAllowedPrivateNetworks(): string {
+    return this.configService.get<string>('ALLOWED_PRIVATE_NETWORKS', 'none');
   }
 }

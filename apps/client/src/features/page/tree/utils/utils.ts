@@ -68,6 +68,8 @@ export function buildTree(pages: IPage[]): SpaceTreeNode[] {
       hasChildren: page.hasChildren,
       spaceId: page.spaceId,
       parentPageId: page.parentPageId,
+      isBase: page.isBase,
+      canEdit: page.canEdit ?? page.permissions?.canEdit,
       children: [],
       createdAt: page.createdAt,
       updatedAt: page.updatedAt,
@@ -87,10 +89,6 @@ export function findBreadcrumbPath(
   path: SpaceTreeNode[] = [],
 ): SpaceTreeNode[] | null {
   for (const node of tree) {
-    if (!node.name || node.name.trim() === "") {
-      node.name = "untitled";
-    }
-
     if (node.id === pageId) {
       return [...path, node];
     }
@@ -251,7 +249,14 @@ export function mergeRootTrees(
   prevRoots: SpaceTreeNode[],
   incomingRoots: SpaceTreeNode[],
 ): SpaceTreeNode[] {
-  const seen = new Set(prevRoots.map((r) => r.id));
+  const seen = new Set<string>();
+  const collect = (nodes: SpaceTreeNode[]) => {
+    for (const node of nodes) {
+      seen.add(node.id);
+      if (node.children?.length) collect(node.children);
+    }
+  };
+  collect(prevRoots);
 
   // add new roots that were not present before
   const merged = [...prevRoots];
@@ -260,4 +265,22 @@ export function mergeRootTrees(
   });
 
   return sortPositionKeys(merged);
+}
+
+export function spaceRoots(
+  tree: SpaceTreeNode[],
+  spaceId: string,
+): SpaceTreeNode[] {
+  return tree.filter((node) => node?.spaceId === spaceId);
+}
+
+export function updateSpaceRoots(
+  tree: SpaceTreeNode[],
+  spaceId: string,
+  update: (roots: SpaceTreeNode[]) => SpaceTreeNode[],
+): SpaceTreeNode[] {
+  const roots = spaceRoots(tree, spaceId);
+  const next = update(roots);
+  if (next === roots) return tree;
+  return [...tree.filter((node) => node?.spaceId !== spaceId), ...next];
 }

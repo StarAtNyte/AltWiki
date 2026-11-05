@@ -8,7 +8,7 @@ import {
   UpdatablePage,
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
-import { executeWithPagination } from '@docmost/db/pagination/pagination';
+import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { validate as isValidUUID } from 'uuid';
 import { ExpressionBuilder, sql } from 'kysely';
 import { DB } from '@docmost/db/types/db';
@@ -38,6 +38,7 @@ export class PageRepo {
     'spaceId',
     'workspaceId',
     'isLocked',
+    'isBase',
     'createdAt',
     'updatedAt',
     'deletedAt',
@@ -54,6 +55,7 @@ export class PageRepo {
       includeCreator?: boolean;
       includeLastUpdatedBy?: boolean;
       includeContributors?: boolean;
+      includeDeletedBy?: boolean;
       includeHasChildren?: boolean;
       withLock?: boolean;
       trx?: KyselyTransaction;
@@ -83,6 +85,10 @@ export class PageRepo {
       query = query.select((eb) => this.withContributors(eb));
     }
 
+    if (opts?.includeDeletedBy) {
+      query = query.select((eb) => this.withDeletedBy(eb));
+    }
+
     if (opts?.includeSpace) {
       query = query.select((eb) => this.withSpace(eb));
     }
@@ -98,6 +104,30 @@ export class PageRepo {
     }
 
     return query.executeTakeFirst();
+  }
+
+  async findManyByIds(
+    pageIds: string[],
+    opts?: {
+      trx?: KyselyTransaction;
+      workspaceId?: string;
+    },
+  ): Promise<Page[]> {
+    if (pageIds.length === 0) return [];
+    const db = dbOrTx(this.db, opts?.trx);
+
+    let query = db
+      .selectFrom('pages')
+      .select(this.baseFields)
+      .where('id', 'in', pageIds);
+
+    if (opts?.workspaceId) {
+      query = query
+        .where('workspaceId', '=', opts.workspaceId)
+        .where('deletedAt', 'is', null);
+    }
+
+    return query.execute();
   }
 
   async updatePage(
@@ -129,6 +159,22 @@ export class PageRepo {
     });
 
     return result;
+  }
+
+  async lockPageHierarchySpaces(
+    spaceIds: string[],
+    trx: KyselyTransaction,
+  ): Promise<void> {
+    const sortedSpaceIds = [...new Set(spaceIds)].sort();
+
+    for (const spaceId of sortedSpaceIds) {
+      await sql`
+        SELECT pg_advisory_xact_lock(
+          hashtext('page-hierarchy'),
+          hashtext(${spaceId})
+        )
+      `.execute(trx);
+    }
   }
 
   async insertPage(
@@ -175,11 +221,13 @@ export class PageRepo {
           .selectFrom('pages')
           .select(['id'])
           .where('id', '=', pageId)
+          .where('deletedAt', 'is', null)
           .unionAll((exp) =>
             exp
               .selectFrom('pages as p')
               .select(['p.id'])
-              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId'),
+              .innerJoin('page_descendants as pd', 'pd.id', 'p.parentPageId')
+              .where('p.deletedAt', 'is', null),
           ),
       )
       .selectFrom('page_descendants')
@@ -197,6 +245,7 @@ export class PageRepo {
             deletedAt: currentDate,
           })
           .where('id', 'in', pageIds)
+          .where('deletedAt', 'is', null)
           .execute();
 
         await trx.deleteFrom('shares').where('pageId', 'in', pageIds).execute();
@@ -281,15 +330,21 @@ export class PageRepo {
       .select(this.baseFields)
       .select((eb) => this.withSpace(eb))
       .where('spaceId', '=', spaceId)
-      .where('deletedAt', 'is', null)
-      .orderBy('updatedAt', 'desc');
+      .where('deletedAt', 'is', null);
 
-    const result = executeWithPagination(query, {
-      page: pagination.page,
+    return executeWithCursorPagination(query, {
       perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'updatedAt', direction: 'desc' },
+        { expression: 'id', direction: 'desc' },
+      ],
+      parseCursor: (cursor) => ({
+        updatedAt: new Date(cursor.updatedAt),
+        id: cursor.id,
+      }),
     });
-
-    return result;
   }
 
   async getRecentPages(userId: string, pagination: PaginationOptions) {
@@ -298,12 +353,49 @@ export class PageRepo {
       .select(this.baseFields)
       .select((eb) => this.withSpace(eb))
       .where('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(userId))
-      .where('deletedAt', 'is', null)
-      .orderBy('updatedAt', 'desc');
+      .where('deletedAt', 'is', null);
 
-    return executeWithPagination(query, {
-      page: pagination.page,
+    return executeWithCursorPagination(query, {
       perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'updatedAt', direction: 'desc' },
+        { expression: 'id', direction: 'desc' },
+      ],
+      parseCursor: (cursor) => ({
+        updatedAt: new Date(cursor.updatedAt),
+        id: cursor.id,
+      }),
+    });
+  }
+
+  async getCreatedByPages(creatorId: string, requestingUserId: string, pagination: PaginationOptions, spaceId?: string) {
+    let query = this.db
+      .selectFrom('pages')
+      .select(this.baseFields)
+      .select((eb) => this.withSpace(eb))
+      .where('creatorId', '=', creatorId)
+      .where('deletedAt', 'is', null);
+
+    if (spaceId) {
+      query = query.where('spaceId', '=', spaceId);
+    } else {
+      query = query.where('spaceId', 'in', this.spaceMemberRepo.getUserSpaceIdsQuery(requestingUserId));
+    }
+
+    return executeWithCursorPagination(query, {
+      perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'updatedAt', direction: 'desc' },
+        { expression: 'id', direction: 'desc' },
+      ],
+      parseCursor: (cursor) => ({
+        updatedAt: new Date(cursor.updatedAt),
+        id: cursor.id,
+      }),
     });
   }
 
@@ -331,15 +423,21 @@ export class PageRepo {
             ),
           ),
         ]),
-      )
-      .orderBy('deletedAt', 'desc');
+      );
 
-    const result = executeWithPagination(query, {
-      page: pagination.page,
+    return executeWithCursorPagination(query, {
       perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'deletedAt', direction: 'desc' },
+        { expression: 'id', direction: 'desc' },
+      ],
+      parseCursor: (cursor) => ({
+        deletedAt: new Date(cursor.deletedAt),
+        id: cursor.id,
+      }),
     });
-
-    return result;
   }
 
   withSpace(eb: ExpressionBuilder<DB, 'pages'>) {
@@ -407,9 +505,9 @@ export class PageRepo {
 
   async getPageAndDescendants(
     parentPageId: string,
-    opts: { includeContent: boolean },
+    opts: { includeContent: boolean; trx?: KyselyTransaction },
   ) {
-    return this.db
+    return dbOrTx(this.db, opts.trx)
       .withRecursive('page_hierarchy', (db) =>
         db
           .selectFrom('pages')
@@ -422,6 +520,8 @@ export class PageRepo {
             'parentPageId',
             'spaceId',
             'workspaceId',
+            'createdAt',
+            'updatedAt',
           ])
           .$if(opts?.includeContent, (qb) => qb.select('content'))
           .where('id', '=', parentPageId)
@@ -438,6 +538,8 @@ export class PageRepo {
                 'p.parentPageId',
                 'p.spaceId',
                 'p.workspaceId',
+                'p.createdAt',
+                'p.updatedAt',
               ])
               .$if(opts?.includeContent, (qb) => qb.select('p.content'))
               .innerJoin('page_hierarchy as ph', 'p.parentPageId', 'ph.id')
@@ -447,5 +549,191 @@ export class PageRepo {
       .selectFrom('page_hierarchy')
       .selectAll()
       .execute();
+  }
+
+  async isPageDescendant(
+    ancestorPageId: string,
+    descendantPageId: string,
+    trx?: KyselyTransaction,
+  ): Promise<boolean> {
+    const result = await dbOrTx(this.db, trx)
+      .withRecursive('page_ancestors', (db) =>
+        db
+          .selectFrom('pages')
+          .select(['id', 'parentPageId'])
+          .where('id', '=', descendantPageId)
+          .union((exp) =>
+            exp
+              .selectFrom('pages as parent')
+              .select(['parent.id', 'parent.parentPageId'])
+              .innerJoin(
+                'page_ancestors as ancestor',
+                'ancestor.parentPageId',
+                'parent.id',
+              ),
+          ),
+      )
+      .selectFrom('page_ancestors')
+      .select('id')
+      .where('id', '=', ancestorPageId)
+      .executeTakeFirst();
+
+    return Boolean(result);
+  }
+
+  /**
+   * Get page and all descendants, excluding restricted pages and their subtrees.
+   * More efficient than getPageAndDescendants + filtering because:
+   * 1. Single DB query (no separate restricted IDs query)
+   * 2. Stops traversing at restricted pages (doesn't fetch data to discard)
+   * 3. No in-memory filtering needed
+   */
+  async getPageAndDescendantsExcludingRestricted(
+    parentPageId: string,
+    opts: { includeContent: boolean },
+  ) {
+    return (
+      this.db
+        .withRecursive('page_hierarchy', (db) =>
+          db
+            .selectFrom('pages')
+            .leftJoin('pageAccess', 'pageAccess.pageId', 'pages.id')
+            .select([
+              'pages.id',
+              'pages.slugId',
+              'pages.title',
+              'pages.icon',
+              'pages.position',
+              'pages.parentPageId',
+              'pages.spaceId',
+              'pages.workspaceId',
+              'pages.updatedAt',
+              sql<boolean>`page_access.id IS NOT NULL`.as('isRestricted'),
+            ])
+            .$if(opts?.includeContent, (qb) => qb.select('pages.content'))
+            .where('pages.id', '=', parentPageId)
+            .where('pages.deletedAt', 'is', null)
+            .unionAll((exp) =>
+              exp
+                .selectFrom('pages as p')
+                .innerJoin('page_hierarchy as ph', 'p.parentPageId', 'ph.id')
+                .leftJoin('pageAccess', 'pageAccess.pageId', 'p.id')
+                .select([
+                  'p.id',
+                  'p.slugId',
+                  'p.title',
+                  'p.icon',
+                  'p.position',
+                  'p.parentPageId',
+                  'p.spaceId',
+                  'p.workspaceId',
+                  'p.updatedAt',
+                  sql<boolean>`page_access.id IS NOT NULL`.as('isRestricted'),
+                ])
+                .$if(opts?.includeContent, (qb) => qb.select('p.content'))
+                .where('p.deletedAt', 'is', null)
+                // Only recurse into children of non-restricted pages
+                .where('ph.isRestricted', '=', false),
+            ),
+        )
+        .selectFrom('page_hierarchy')
+        .select([
+          'id',
+          'slugId',
+          'title',
+          'icon',
+          'position',
+          'parentPageId',
+          'spaceId',
+          'workspaceId',
+          'updatedAt',
+        ])
+        .$if(opts?.includeContent, (qb) => qb.select('content'))
+        // Filter out restricted pages from the result
+        .where('isRestricted', '=', false)
+        .execute()
+    );
+  }
+
+  /**
+   * All pages of a space excluding restricted subtrees.
+   * Used by public spaces; a restricted page hides its whole subtree.
+   */
+  async getSpacePagesExcludingRestricted(spaceId: string) {
+    return this.db
+      .withRecursive('page_hierarchy', (db) =>
+        db
+          .selectFrom('pages')
+          .leftJoin('pageAccess', 'pageAccess.pageId', 'pages.id')
+          .select([
+            'pages.id',
+            'pages.slugId',
+            'pages.title',
+            'pages.icon',
+            'pages.position',
+            'pages.parentPageId',
+            'pages.spaceId',
+            'pages.workspaceId',
+            'pages.updatedAt',
+            sql<boolean>`page_access.id IS NOT NULL`.as('isRestricted'),
+          ])
+          .where('pages.spaceId', '=', spaceId)
+          .where('pages.parentPageId', 'is', null)
+          .where('pages.deletedAt', 'is', null)
+          .unionAll((exp) =>
+            exp
+              .selectFrom('pages as p')
+              .innerJoin('page_hierarchy as ph', 'p.parentPageId', 'ph.id')
+              .leftJoin('pageAccess', 'pageAccess.pageId', 'p.id')
+              .select([
+                'p.id',
+                'p.slugId',
+                'p.title',
+                'p.icon',
+                'p.position',
+                'p.parentPageId',
+                'p.spaceId',
+                'p.workspaceId',
+                'p.updatedAt',
+                sql<boolean>`page_access.id IS NOT NULL`.as('isRestricted'),
+              ])
+              .where('p.deletedAt', 'is', null)
+              .where('ph.isRestricted', '=', false),
+          ),
+      )
+      .selectFrom('page_hierarchy')
+      .select([
+        'id',
+        'slugId',
+        'title',
+        'icon',
+        'position',
+        'parentPageId',
+        'spaceId',
+        'workspaceId',
+        'updatedAt',
+      ])
+      .where('isRestricted', '=', false)
+      .execute();
+  }
+
+  async getFirstUnrestrictedRootPage(spaceId: string) {
+    return this.db
+      .selectFrom('pages')
+      .select(['id', 'slugId'])
+      .where('spaceId', '=', spaceId)
+      .where('parentPageId', 'is', null)
+      .where('deletedAt', 'is', null)
+      .where(({ not, exists, selectFrom }) =>
+        not(
+          exists(
+            selectFrom('pageAccess')
+              .select('pageAccess.id')
+              .whereRef('pageAccess.pageId', '=', 'pages.id'),
+          ),
+        ),
+      )
+      .orderBy('position', (ob) => ob.collate('C').asc())
+      .executeTakeFirst();
   }
 }

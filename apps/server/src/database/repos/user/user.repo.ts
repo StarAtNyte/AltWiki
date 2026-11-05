@@ -10,9 +10,10 @@ import {
   User,
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '../../pagination/pagination-options';
-import { executeWithPagination } from '@docmost/db/pagination/pagination';
+import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { ExpressionBuilder, sql } from 'kysely';
 import { jsonObjectFrom } from 'kysely/helpers/postgres';
+import { NotificationSettingKey } from '../../../core/notification/notification.constants';
 
 @Injectable()
 export class UserRepo {
@@ -43,6 +44,7 @@ export class UserRepo {
     opts?: {
       includePassword?: boolean;
       includeUserMfa?: boolean;
+      includeScimExternalId?: boolean;
       trx?: KyselyTransaction;
     },
   ): Promise<User> {
@@ -52,6 +54,7 @@ export class UserRepo {
       .select(this.baseFields)
       .$if(opts?.includePassword, (qb) => qb.select('password'))
       .$if(opts?.includeUserMfa, (qb) => qb.select(this.withUserMfa))
+      .$if(opts?.includeScimExternalId, (qb) => qb.select('scimExternalId'))
       .where('id', '=', userId)
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
@@ -63,6 +66,7 @@ export class UserRepo {
     opts?: {
       includePassword?: boolean;
       includeUserMfa?: boolean;
+      includeScimExternalId?: boolean;
       trx?: KyselyTransaction;
     },
   ): Promise<User> {
@@ -72,6 +76,7 @@ export class UserRepo {
       .select(this.baseFields)
       .$if(opts?.includePassword, (qb) => qb.select('password'))
       .$if(opts?.includeUserMfa, (qb) => qb.select(this.withUserMfa))
+      .$if(opts?.includeScimExternalId, (qb) => qb.select('scimExternalId'))
       .where(sql`LOWER(email)`, '=', sql`LOWER(${email})`)
       .where('workspaceId', '=', workspaceId)
       .executeTakeFirst();
@@ -107,6 +112,7 @@ export class UserRepo {
   async insertUser(
     insertableUser: InsertableUser,
     trx?: KyselyTransaction,
+    opts?: { pageEditMode?: string },
   ): Promise<User> {
     const user: InsertableUser = {
       name:
@@ -121,7 +127,17 @@ export class UserRepo {
     const db = dbOrTx(this.db, trx);
     return db
       .insertInto('users')
-      .values({ ...insertableUser, ...user })
+      .values({
+        ...insertableUser,
+        ...user,
+        ...(opts?.pageEditMode
+          ? {
+              settings: sql`${JSON.stringify({
+                preferences: { pageEditMode: opts.pageEditMode },
+              })}::text::jsonb`,
+            }
+          : {}),
+      })
       .returning(this.baseFields)
       .executeTakeFirst();
   }
@@ -129,12 +145,16 @@ export class UserRepo {
   async roleCountByWorkspaceId(
     role: string,
     workspaceId: string,
+    trx?: KyselyTransaction,
   ): Promise<number> {
-    const { count } = await this.db
+    const db = dbOrTx(this.db, trx);
+    const { count } = await db
       .selectFrom('users')
       .select((eb) => eb.fn.count('role').as('count'))
       .where('role', '=', role)
       .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null)
+      .where('deactivatedAt', 'is', null)
       .executeTakeFirst();
 
     return count as number;
@@ -145,8 +165,7 @@ export class UserRepo {
       .selectFrom('users')
       .select(this.baseFields)
       .where('workspaceId', '=', workspaceId)
-      .where('deletedAt', 'is', null)
-      .orderBy('createdAt', 'asc');
+      .where('deletedAt', 'is', null);
 
     if (pagination.query) {
       query = query.where((eb) =>
@@ -162,12 +181,16 @@ export class UserRepo {
       );
     }
 
-    const result = executeWithPagination(query, {
-      page: pagination.page,
+    return executeWithCursorPagination(query, {
       perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'name', direction: 'asc' },
+        { expression: 'id', direction: 'asc' },
+      ],
+      parseCursor: (cursor) => ({ name: cursor.name, id: cursor.id }),
     });
-
-    return result;
   }
 
   async updatePreference(
@@ -181,6 +204,24 @@ export class UserRepo {
         settings: sql`COALESCE(settings, '{}'::jsonb)
                 || jsonb_build_object('preferences', COALESCE(settings->'preferences', '{}'::jsonb) 
                 || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', userId)
+      .returning(this.baseFields)
+      .executeTakeFirst();
+  }
+
+  async updateNotificationSetting(
+    userId: string,
+    settingKey: NotificationSettingKey,
+    settingValue: boolean,
+  ) {
+    return await this.db
+      .updateTable('users')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+                || jsonb_build_object('notifications', COALESCE(settings->'notifications', '{}'::jsonb)
+                || jsonb_build_object(${sql.lit(settingKey)}, ${sql.lit(settingValue)}))`,
         updatedAt: new Date(),
       })
       .where('id', '=', userId)

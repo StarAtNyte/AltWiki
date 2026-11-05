@@ -13,6 +13,9 @@ import {
   IconKey,
   IconWorld,
   IconSparkles,
+  IconPlug,
+  IconHistory,
+  IconShieldCheck,
 } from "@tabler/icons-react";
 import { Link, useLocation } from "react-router-dom";
 import classes from "./settings.module.css";
@@ -20,38 +23,44 @@ import { useTranslation } from "react-i18next";
 import { isCloud } from "@/lib/config.ts";
 import useUserRole from "@/hooks/use-user-role.tsx";
 import { useAtom } from "jotai";
-import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { entitlementAtom } from "@/ee/entitlement/entitlement-atom";
+import { Feature } from "@/ee/features";
+import { useUpgradeLabel } from "@/ee/hooks/use-upgrade-label";
 import {
   prefetchApiKeyManagement,
   prefetchApiKeys,
   prefetchBilling,
   prefetchGroups,
   prefetchLicense,
+  prefetchScimTokens,
   prefetchShares,
   prefetchSpaces,
   prefetchSsoProviders,
   prefetchWorkspaceMembers,
+  prefetchAuditLogs,
+  prefetchVerifiedPages,
 } from "@/components/settings/settings-queries.tsx";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { useSettingsNavigation } from "@/hooks/use-settings-navigation";
+import { useInstalledIntegrations } from "@/features/integration/queries/integration-query";
 
-interface DataItem {
+type DataItem = {
   label: string;
   icon: React.ElementType;
   path: string;
-  isCloud?: boolean;
-  isEnterprise?: boolean;
-  isAdmin?: boolean;
-  isSelfhosted?: boolean;
-  showDisabledInNonEE?: boolean;
+  feature?: string;
+  role?: "admin" | "owner";
+  env?: "cloud" | "selfhosted";
+  requiresInstalledIntegration?: boolean;
+  // AltWiki: hidden entirely (not just disabled) when no paid licence.
   requiresEE?: boolean;
-}
+};
 
-interface DataGroup {
+type DataGroup = {
   heading: string;
   items: DataItem[];
-}
+};
 
 const groupedData: DataGroup[] = [
   {
@@ -67,9 +76,13 @@ const groupedData: DataGroup[] = [
         label: "API keys",
         icon: IconKey,
         path: "/settings/account/api-keys",
-        isCloud: true,
-        isEnterprise: true,
-        showDisabledInNonEE: true,
+        feature: Feature.API_KEYS,
+      },
+      {
+        label: "Connections",
+        icon: IconPlug,
+        path: "/settings/account/connections",
+        requiresInstalledIntegration: true,
       },
     ],
   },
@@ -77,46 +90,57 @@ const groupedData: DataGroup[] = [
     heading: "Workspace",
     items: [
       { label: "General", icon: IconSettings, path: "/settings/workspace" },
-      {
-        label: "Members",
-        icon: IconUsers,
-        path: "/settings/members",
-      },
+      { label: "Members", icon: IconUsers, path: "/settings/members" },
       {
         label: "Billing",
         icon: IconCoin,
         path: "/settings/billing",
-        isCloud: true,
-        isAdmin: true,
+        role: "admin",
+        env: "cloud",
       },
       {
         label: "Security & SSO",
         icon: IconLock,
         path: "/settings/security",
-        isCloud: true,
-        isEnterprise: true,
-        isAdmin: true,
-        showDisabledInNonEE: true,
+        feature: Feature.SECURITY_SETTINGS,
+        role: "admin",
       },
       { label: "Groups", icon: IconUsersGroup, path: "/settings/groups" },
       { label: "Spaces", icon: IconSpaces, path: "/settings/spaces" },
       { label: "Public sharing", icon: IconWorld, path: "/settings/sharing" },
       {
+        label: "Verified pages",
+        icon: IconShieldCheck,
+        path: "/settings/verifications",
+        feature: Feature.PAGE_VERIFICATION,
+      },
+      {
         label: "API management",
         icon: IconKey,
         path: "/settings/api-keys",
-        isCloud: true,
-        isEnterprise: true,
-        isAdmin: true,
-        showDisabledInNonEE: true,
+        feature: Feature.API_KEYS,
+        role: "admin",
       },
       {
         label: "AI settings",
         icon: IconSparkles,
         path: "/settings/ai",
-        isAdmin: true,
-        isSelfhosted: true,
+        role: "admin",
         requiresEE: true,
+      },
+      {
+        label: "Audit logs & SIEM",
+        icon: IconHistory,
+        path: "/settings/audit",
+        feature: Feature.AUDIT_LOGS,
+        role: "owner",
+        env: "selfhosted",
+      },
+      {
+        label: "Integrations",
+        icon: IconPlug,
+        path: "/settings/integrations",
+        role: "admin",
       },
     ],
   },
@@ -138,8 +162,9 @@ export default function SettingsSidebar() {
   const location = useLocation();
   const [active, setActive] = useState(location.pathname);
   const { goBack } = useSettingsNavigation();
-  const { isAdmin } = useUserRole();
-  const [workspace] = useAtom(workspaceAtom);
+  const { isAdmin, isOwner } = useUserRole();
+  const [entitlements] = useAtom(entitlementAtom);
+  const upgradeLabel = useUpgradeLabel();
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
 
@@ -147,48 +172,34 @@ export default function SettingsSidebar() {
     setActive(location.pathname);
   }, [location.pathname]);
 
-  // The server ships no enterprise module, so EE-backed entries are hidden
-  // unless the workspace is cloud or has a license key (reversible gate).
-  const eeAvailable = isCloud() || !!workspace?.hasLicenseKey;
+  const { data: installedIntegrations } = useInstalledIntegrations();
+
+  const hasFeature = (f: string) =>
+    entitlements?.features?.includes(f) ?? false;
+
+  // AltWiki: the server ships no enterprise module, so EE-backed entries are
+  // hidden (not shown disabled) unless the workspace is cloud or has a paid
+  // licence tier (reversible gate).
+  const eeAvailable =
+    isCloud() || (entitlements != null && entitlements.tier !== "free");
 
   const canShowItem = (item: DataItem) => {
-    if (!eeAvailable && (item.isEnterprise || item.requiresEE)) {
+    if (!eeAvailable && (item.requiresEE || isItemDisabled(item))) {
       return false;
     }
-
-    if (item.showDisabledInNonEE && item.isEnterprise) {
-      return item.isAdmin ? isAdmin : true;
+    if (item.env === "cloud" && !isCloud()) return false;
+    if (item.env === "selfhosted" && isCloud()) return false;
+    if (item.role === "admin" && !isAdmin) return false;
+    if (item.role === "owner" && !isOwner) return false;
+    if (item.requiresInstalledIntegration && !installedIntegrations?.length) {
+      return false;
     }
-
-    if (item.isCloud && item.isEnterprise) {
-      if (!(isCloud() || workspace?.hasLicenseKey)) return false;
-      return item.isAdmin ? isAdmin : true;
-    }
-
-    if (item.isCloud) {
-      return isCloud() ? (item.isAdmin ? isAdmin : true) : false;
-    }
-
-    if (item.isSelfhosted) {
-      return !isCloud() ? (item.isAdmin ? isAdmin : true) : false;
-    }
-
-    if (item.isEnterprise) {
-      return workspace?.hasLicenseKey ? (item.isAdmin ? isAdmin : true) : false;
-    }
-
-    if (item.isAdmin) {
-      return isAdmin;
-    }
-
     return true;
   };
 
   const isItemDisabled = (item: DataItem) => {
-    if (item.showDisabledInNonEE && item.isEnterprise) {
-      return !(isCloud() || workspace?.hasLicenseKey);
-    }
-    return false;
+    if (!item.feature) return false;
+    return !hasFeature(item.feature);
   };
 
   const menuItems = groupedData.map((group) => {
@@ -221,12 +232,15 @@ export default function SettingsSidebar() {
               prefetchHandler = prefetchBilling;
               break;
             case "License & Edition":
-              if (workspace?.hasLicenseKey) {
+              if (entitlements?.tier !== "free") {
                 prefetchHandler = prefetchLicense;
               }
               break;
             case "Security & SSO":
-              prefetchHandler = prefetchSsoProviders;
+              prefetchHandler = () => {
+                prefetchSsoProviders();
+                prefetchScimTokens();
+              };
               break;
             case "Public sharing":
               prefetchHandler = prefetchShares;
@@ -237,52 +251,61 @@ export default function SettingsSidebar() {
             case "API management":
               prefetchHandler = prefetchApiKeyManagement;
               break;
+            case "Audit logs & SIEM":
+              prefetchHandler = prefetchAuditLogs;
+              break;
+            case "Verified pages":
+              prefetchHandler = prefetchVerifiedPages;
+              break;
             default:
               break;
           }
 
           const isDisabled = isItemDisabled(item);
-          const linkElement = (
+
+          if (isDisabled) {
+            return (
+              <Tooltip
+                key={item.label}
+                label={upgradeLabel}
+                position="right"
+                withArrow
+              >
+                <span
+                  className={classes.link}
+                  data-disabled
+                  role="link"
+                  aria-disabled="true"
+                  tabIndex={0}
+                  style={{
+                    opacity: 0.5,
+                    cursor: "not-allowed",
+                  }}
+                >
+                  <item.icon className={classes.linkIcon} stroke={2} />
+                  <span>{t(item.label)}</span>
+                </span>
+              </Tooltip>
+            );
+          }
+
+          return (
             <Link
-              onMouseEnter={!isDisabled ? prefetchHandler : undefined}
+              onMouseEnter={prefetchHandler}
               className={classes.link}
               data-active={active.startsWith(item.path) || undefined}
-              data-disabled={isDisabled || undefined}
               key={item.label}
-              to={isDisabled ? "#" : item.path}
-              onClick={(e) => {
-                if (isDisabled) {
-                  e.preventDefault();
-                  return;
-                }
+              to={item.path}
+              onClick={() => {
                 if (mobileSidebarOpened) {
                   toggleMobileSidebar();
                 }
-              }}
-              style={{
-                opacity: isDisabled ? 0.5 : 1,
-                cursor: isDisabled ? "not-allowed" : "pointer",
               }}
             >
               <item.icon className={classes.linkIcon} stroke={2} />
               <span>{t(item.label)}</span>
             </Link>
           );
-
-          if (isDisabled) {
-            return (
-              <Tooltip
-                key={item.label}
-                label={t("Available in enterprise edition")}
-                position="right"
-                withArrow
-              >
-                {linkElement}
-              </Tooltip>
-            );
-          }
-
-          return linkElement;
         })}
       </div>
     );
@@ -300,7 +323,7 @@ export default function SettingsSidebar() {
           }}
           variant="transparent"
           c="gray"
-          aria-label="Back"
+          aria-label={t("Back")}
         >
           <IconArrowLeft stroke={2} />
         </ActionIcon>

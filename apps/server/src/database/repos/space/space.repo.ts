@@ -9,7 +9,7 @@ import {
 } from '@docmost/db/types/entity.types';
 import { ExpressionBuilder, sql } from 'kysely';
 import { PaginationOptions } from '../../pagination/pagination-options';
-import { executeWithPagination } from '@docmost/db/pagination/pagination';
+import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { DB } from '@docmost/db/types/db';
 import { validate as isValidUUID } from 'uuid';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -25,7 +25,11 @@ export class SpaceRepo {
   async findById(
     spaceId: string,
     workspaceId: string,
-    opts?: { includeMemberCount?: boolean; trx?: KyselyTransaction },
+    opts?: {
+      includeMemberCount?: boolean;
+      withLock?: boolean;
+      trx?: KyselyTransaction;
+    },
   ): Promise<Space> {
     const db = dbOrTx(this.db, opts?.trx);
 
@@ -33,6 +37,7 @@ export class SpaceRepo {
       .selectFrom('spaces')
       .selectAll('spaces')
       .$if(opts?.includeMemberCount, (qb) => qb.select(this.withMemberCount))
+      .select((eb) => this.withIsPublished(eb))
       .where('workspaceId', '=', workspaceId);
 
     if (isValidUUID(spaceId)) {
@@ -40,6 +45,11 @@ export class SpaceRepo {
     } else {
       query = query.where(sql`LOWER(slug)`, '=', sql`LOWER(${spaceId})`);
     }
+
+    if (opts?.withLock && opts?.trx) {
+      query = query.forUpdate();
+    }
+
     return query.executeTakeFirst();
   }
 
@@ -52,8 +62,25 @@ export class SpaceRepo {
       .selectFrom('spaces')
       .selectAll('spaces')
       .$if(opts?.includeMemberCount, (qb) => qb.select(this.withMemberCount))
+      .select((eb) => this.withIsPublished(eb))
       .where(sql`LOWER(slug)`, '=', sql`LOWER(${slug})`)
       .where('workspaceId', '=', workspaceId)
+      .executeTakeFirst();
+  }
+
+  async findPersonalSpace(
+    userId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<Space | undefined> {
+    const db = dbOrTx(this.db, trx);
+    return db
+      .selectFrom('spaces')
+      .selectAll('spaces')
+      .where('workspaceId', '=', workspaceId)
+      .where('creatorId', '=', userId)
+      .where('isPersonal', '=', true)
+      .where('deletedAt', 'is', null)
       .executeTakeFirst();
   }
 
@@ -89,6 +116,50 @@ export class SpaceRepo {
       .executeTakeFirst();
   }
 
+  async updateSharingSettings(
+    spaceId: string,
+    workspaceId: string,
+    prefKey: string,
+    prefValue: string | boolean,
+    trx?: KyselyTransaction,
+  ) {
+    const db = dbOrTx(this.db, trx);
+    return db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('sharing', COALESCE(settings->'sharing', '{}'::jsonb)
+          || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  async updateCommentSettings(
+    spaceId: string,
+    workspaceId: string,
+    prefKey: string,
+    prefValue: string | boolean,
+    trx?: KyselyTransaction,
+  ) {
+    const db = dbOrTx(this.db, trx);
+    return db
+      .updateTable('spaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+          || jsonb_build_object('comments', COALESCE(settings->'comments', '{}'::jsonb)
+          || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', spaceId)
+      .where('workspaceId', '=', workspaceId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
   async insertSpace(
     insertableSpace: InsertableSpace,
     trx?: KyselyTransaction,
@@ -109,8 +180,8 @@ export class SpaceRepo {
       .selectFrom('spaces')
       .selectAll('spaces')
       .select((eb) => [this.withMemberCount(eb)])
-      .where('workspaceId', '=', workspaceId)
-      .orderBy('createdAt', 'asc');
+      .select((eb) => this.withIsPublished(eb))
+      .where('workspaceId', '=', workspaceId);
 
     if (pagination.query) {
       query = query.where((eb) =>
@@ -126,12 +197,16 @@ export class SpaceRepo {
       );
     }
 
-    const result = executeWithPagination(query, {
-      page: pagination.page,
+    return executeWithCursorPagination(query, {
       perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'name', direction: 'asc' },
+        { expression: 'id', direction: 'asc' },
+      ],
+      parseCursor: (cursor) => ({ name: cursor.name, id: cursor.id }),
     });
-
-    return result;
   }
 
   withMemberCount(eb: ExpressionBuilder<DB, 'spaces'>) {
@@ -157,6 +232,18 @@ export class SpaceRepo {
       .as('memberCount');
   }
 
+  withIsPublished(eb: ExpressionBuilder<DB, 'spaces'>) {
+    return eb
+      .exists(
+        eb
+          .selectFrom('publicSpaces')
+          .select('publicSpaces.id')
+          .whereRef('publicSpaces.spaceId', '=', 'spaces.id')
+          .where('publicSpaces.enabled', '=', true),
+      )
+      .as('isPublished');
+  }
+
   async deleteSpace(spaceId: string, workspaceId: string): Promise<void> {
     await this.db
       .deleteFrom('spaces')
@@ -166,6 +253,7 @@ export class SpaceRepo {
 
     this.eventEmitter.emit(EventName.SPACE_DELETED, {
       spaceId,
+      workspaceId,
     });
   }
 }

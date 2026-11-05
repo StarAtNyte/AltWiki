@@ -7,7 +7,6 @@ import {
   Group,
   ActionIcon,
   Text,
-  Alert,
   Stack,
   Menu,
   Checkbox,
@@ -15,12 +14,11 @@ import {
   Box,
 } from "@mantine/core";
 import {
-  IconInfoCircle,
   IconDots,
   IconRestore,
   IconTrash,
-  IconFileDescription,
 } from "@tabler/icons-react";
+import { TrashBanner } from "@/features/page/trash/components/trash-banner.tsx";
 import {
   useDeletedPagesQuery,
   useRestorePageMutation,
@@ -35,19 +33,21 @@ import { useState, useCallback, useMemo } from "react";
 import TrashPageContentModal from "@/features/page/trash/components/trash-page-content-modal";
 import { UserInfo } from "@/components/common/user-info.tsx";
 import Paginate from "@/components/common/paginate.tsx";
-import { usePaginateAndSearch } from "@/hooks/use-paginate-and-search";
+import { useCursorPaginate } from "@/hooks/use-cursor-paginate";
+import { useRestorePageModal } from "@/features/page/hooks/use-restore-page-modal.tsx";
+import { PageListIcon } from "@/components/common/page-list-icon";
 
 export default function Trash() {
   const { t } = useTranslation();
   const { spaceSlug } = useParams();
-  const { page, setPage } = usePaginateAndSearch();
+  const { cursor, goNext, goPrev } = useCursorPaginate();
   const { data: space } = useGetSpaceBySlugQuery(spaceSlug);
   const { data: deletedPages, isLoading } = useDeletedPagesQuery(space?.id, {
-    page,
-    limit: 50,
+    cursor, limit: 50
   });
   const restorePageMutation = useRestorePageMutation();
   const deletePageMutation = useDeletePageMutation();
+  const { openRestoreModal } = useRestorePageModal();
   const bulkDeleteMutation = useBulkDeletePagesMutation();
   const bulkRestoreMutation = useBulkRestorePagesMutation();
 
@@ -57,6 +57,7 @@ export default function Trash() {
   const [selectedPage, setSelectedPage] = useState<{
     title: string;
     content: any;
+    isBase?: boolean;
   } | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
 
@@ -138,23 +139,6 @@ export default function Trash() {
     });
   };
 
-  const openRestoreModal = (pageId: string, pageTitle: string) => {
-    modals.openConfirmModal({
-      title: t("Restore page"),
-      children: (
-        <Text size="sm">
-          {t("Restore '{{title}}' and its sub-pages?", {
-            title: pageTitle || "Untitled",
-          })}
-        </Text>
-      ),
-      centered: true,
-      labels: { confirm: t("Restore"), cancel: t("Cancel") },
-      confirmProps: { color: "blue" },
-      onConfirm: () => handleRestorePage(pageId),
-    });
-  };
-
   const openBulkDeleteModal = () => {
     modals.openConfirmModal({
       title: t("Delete selected pages"),
@@ -193,7 +177,11 @@ export default function Trash() {
   const hasPages = deletedPages && deletedPages.items.length > 0;
 
   const handlePageClick = (page: any) => {
-    setSelectedPage({ title: page.title, content: page.content });
+    setSelectedPage({
+      title: page.title,
+      content: page.content,
+      isBase: page.isBase,
+    });
     setModalOpened(true);
   };
 
@@ -204,11 +192,7 @@ export default function Trash() {
           <Title order={2}>{t("Trash")}</Title>
         </Group>
 
-        <Alert icon={<IconInfoCircle size={16} />} variant="light" color="red">
-          <Text size="sm">
-            {t("Pages in trash will be permanently deleted after 30 days.")}
-          </Text>
-        </Alert>
+        <TrashBanner />
 
         {selectedPageIds.size > 0 && (
           <Box
@@ -273,7 +257,7 @@ export default function Trash() {
                   <Table.Th style={{ whiteSpace: "nowrap" }}>
                     {t("Deleted at")}
                   </Table.Th>
-                  <Table.Th></Table.Th>
+                  <Table.Th aria-label={t("Action")} />
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -299,15 +283,7 @@ export default function Trash() {
                         style={{ cursor: "pointer" }}
                         onClick={() => handlePageClick(page)}
                       >
-                        {page.icon || (
-                          <ActionIcon
-                            variant="transparent"
-                            color="gray"
-                            size={18}
-                          >
-                            <IconFileDescription size={18} />
-                          </ActionIcon>
-                        )}
+                        <PageListIcon icon={page.icon} isBase={page.isBase} />
                         <div>
                           <Text fw={500} size="sm" lineClamp={1}>
                             {page.title || t("Untitled")}
@@ -331,7 +307,11 @@ export default function Trash() {
                     <Table.Td>
                       <Menu>
                         <Menu.Target>
-                          <ActionIcon variant="subtle" color="gray">
+                          <ActionIcon
+                            variant="subtle"
+                            color="gray"
+                            aria-label={t("Page actions")}
+                          >
                             <IconDots size={20} stroke={1.5} />
                           </ActionIcon>
                         </Menu.Target>
@@ -339,7 +319,10 @@ export default function Trash() {
                           <Menu.Item
                             leftSection={<IconRestore size={16} />}
                             onClick={() =>
-                              openRestoreModal(page.id, page.title)
+                              openRestoreModal({
+                                title: page.title,
+                                onConfirm: () => handleRestorePage(page.id),
+                              })
                             }
                           >
                             {t("Restore")}
@@ -367,10 +350,10 @@ export default function Trash() {
 
         {deletedPages && deletedPages.items.length > 0 && (
           <Paginate
-            currentPage={page}
-            hasPrevPage={deletedPages.meta.hasPrevPage}
-            hasNextPage={deletedPages.meta.hasNextPage}
-            onPageChange={setPage}
+            hasPrevPage={deletedPages.meta?.hasPrevPage}
+            hasNextPage={deletedPages.meta?.hasNextPage}
+            onNext={() => goNext(deletedPages.meta?.nextCursor)}
+            onPrev={goPrev}
           />
         )}
       </Stack>
@@ -381,6 +364,7 @@ export default function Trash() {
           onClose={() => setModalOpened(false)}
           pageTitle={selectedPage.title}
           pageContent={selectedPage.content}
+          isBase={selectedPage.isBase}
         />
       )}
     </Container>

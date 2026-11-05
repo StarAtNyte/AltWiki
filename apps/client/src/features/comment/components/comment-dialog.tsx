@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { Dialog, Group, Stack, Text } from "@mantine/core";
 import { useClickOutside } from "@mantine/hooks";
-import { useAtom } from "jotai";
+import { useAtom, useSetAtom } from "jotai";
 import {
   activeCommentIdAtom,
+  commentPanelTabAtom,
   draftCommentIdAtom,
   showCommentPopupAtom,
+  showReadOnlyCommentPopupAtom,
+  readOnlyCommentDataAtom,
 } from "@/features/comment/atoms/comment-atom";
 import CommentEditor from "@/features/comment/components/comment-editor";
 import CommentActions from "@/features/comment/components/comment-actions";
@@ -13,61 +16,83 @@ import { currentUserAtom } from "@/features/user/atoms/current-user-atom";
 import { useCreateCommentMutation } from "@/features/comment/queries/comment-query";
 import { asideStateAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom";
 import { useEditor } from "@tiptap/react";
+import { isEditorReady } from "@docmost/editor-ext";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { useTranslation } from "react-i18next";
-import { useQueryEmit } from "@/features/websocket/use-query-emit";
 
 interface CommentDialogProps {
   editor: ReturnType<typeof useEditor>;
   pageId: string;
+  readOnly?: boolean;
 }
 
-function CommentDialog({ editor, pageId }: CommentDialogProps) {
+function CommentDialog({ editor, pageId, readOnly }: CommentDialogProps) {
   const { t } = useTranslation();
   const [comment, setComment] = useState("");
   const [, setShowCommentPopup] = useAtom(showCommentPopupAtom);
+  const [, setShowReadOnlyCommentPopup] = useAtom(showReadOnlyCommentPopupAtom);
+  const [readOnlyCommentData, setReadOnlyCommentData] = useAtom(readOnlyCommentDataAtom);
   const [, setActiveCommentId] = useAtom(activeCommentIdAtom);
+  const setCommentPanelTab = useSetAtom(commentPanelTabAtom);
   const [draftCommentId, setDraftCommentId] = useAtom(draftCommentIdAtom);
   const [currentUser] = useAtom(currentUserAtom);
   const [, setAsideState] = useAtom(asideStateAtom);
   const useClickOutsideRef = useClickOutside(() => {
+    if (document.querySelector("#mention")) return;
     handleDialogClose();
   });
   const createCommentMutation = useCreateCommentMutation();
-  const { isPending } = createCommentMutation;
-
-  const emit = useQueryEmit();
+  const isPending = createCommentMutation.isPending;
 
   const handleDialogClose = () => {
-    setShowCommentPopup(false);
-    editor.chain().focus().unsetCommentDecoration().run();
+    if (readOnly) {
+      setShowReadOnlyCommentPopup(false);
+      // @ts-ignore
+      setReadOnlyCommentData(null);
+    } else {
+      setShowCommentPopup(false);
+      if (isEditorReady(editor)) {
+        editor.chain().focus().unsetCommentDecoration().run();
+      }
+    }
   };
 
   const getSelectedText = () => {
+    if (!isEditorReady(editor)) return "";
     const { from, to } = editor.state.selection;
     return editor.state.doc.textBetween(from, to);
   };
 
   const handleAddComment = async () => {
+    if (readOnly) {
+      await handleAddReadOnlyComment();
+      return;
+    }
+
     try {
       const selectedText = getSelectedText();
       const commentData = {
         pageId: pageId,
         content: JSON.stringify(comment),
         selection: selectedText,
+        type: "inline",
       };
 
       const createdComment =
         await createCommentMutation.mutateAsync(commentData);
-      editor
-        .chain()
-        .setComment(createdComment.id)
-        .unsetCommentDecoration()
-        .run();
+      if (isEditorReady(editor)) {
+        editor
+          .chain()
+          .setComment(createdComment.id)
+          .unsetCommentDecoration()
+          .run();
+        editor.commands.setTextSelection({
+          from: editor.view.state.selection.from,
+          to: editor.view.state.selection.from,
+        });
+      }
       setActiveCommentId(createdComment.id);
-
-      //unselect text to close bubble menu
-      editor.commands.setTextSelection({ from: editor.view.state.selection.from, to: editor.view.state.selection.from });
+      setCommentPanelTab("open");
 
       setAsideState({ tab: "comments", isAsideOpen: true });
       setTimeout(() => {
@@ -75,18 +100,42 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
         const commentElement = document.querySelector(selector);
         commentElement?.scrollIntoView({ behavior: "smooth", block: "center" });
 
-        editor.view.dispatch(
-          editor.state.tr.scrollIntoView()
-        );
+        if (isEditorReady(editor)) {
+          editor.view.dispatch(editor.state.tr.scrollIntoView());
+        }
       }, 400);
 
-      emit({
-        operation: "invalidateComment",
-        pageId: pageId,
-      });
     } finally {
       setShowCommentPopup(false);
       setDraftCommentId("");
+    }
+  };
+
+  const handleAddReadOnlyComment = async () => {
+    if (!readOnlyCommentData) return;
+
+    try {
+      const createdComment = await createCommentMutation.mutateAsync({
+        pageId,
+        content: JSON.stringify(comment),
+        selection: readOnlyCommentData.selectedText,
+        type: "inline",
+        yjsSelection: readOnlyCommentData.yjsSelection,
+      });
+
+      setActiveCommentId(createdComment.id);
+      setCommentPanelTab("open");
+      setAsideState({ tab: "comments", isAsideOpen: true });
+
+      setTimeout(() => {
+        const selector = `div[data-comment-id="${createdComment.id}"]`;
+        const commentElement = document.querySelector(selector);
+        commentElement?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 400);
+    } finally {
+      setShowReadOnlyCommentPopup(false);
+      // @ts-ignore
+      setReadOnlyCommentData(null);
     }
   };
 
@@ -102,9 +151,12 @@ function CommentDialog({ editor, pageId }: CommentDialogProps) {
       size="lg"
       radius="md"
       w={300}
+      zIndex={180}
       position={{ bottom: 500, right: 50 }}
       withCloseButton
       withBorder
+      data-comment-dialog
+      aria-label={t("Add comment")}
     >
       <Stack gap={2}>
         <Group>

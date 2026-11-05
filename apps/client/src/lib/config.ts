@@ -1,6 +1,7 @@
 import bytes from "bytes";
 import { castToBoolean } from "@/lib/utils.tsx";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import { sanitizeUrl } from "@docmost/editor-ext";
 
 declare global {
   interface Window {
@@ -42,6 +43,14 @@ export function isCloud(): boolean {
   return castToBoolean(getConfigValue("CLOUD"));
 }
 
+export function isBetaPublicSpaces(): boolean {
+  return castToBoolean(getConfigValue("BETA_PUBLIC_SPACES"));
+}
+
+export function getAiVectorDriver(): string {
+  return getConfigValue("AI_VECTOR_DRIVER");
+}
+
 export function getAvatarUrl(
   avatarUrl: string,
   type: AvatarIconType = AvatarIconType.AVATAR,
@@ -66,7 +75,7 @@ export function getFileUrl(src: string) {
   if (src.startsWith("/files/")) {
     return getBackendUrl() + src;
   }
-  return src;
+  return sanitizeUrl(src);
 }
 
 export function getFileUploadSizeLimit() {

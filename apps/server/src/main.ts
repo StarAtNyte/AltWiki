@@ -10,29 +10,58 @@ import { TransformHttpResponseInterceptor } from './common/interceptors/http-res
 import { WsRedisIoAdapter } from './ws/adapter/ws-redis.adapter';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCookie from '@fastify/cookie';
+import { InternalLogFilter } from './common/logger/internal-log-filter';
+import { EnvironmentService } from './integrations/environment/environment.service';
+import {
+  overrideRequestIp,
+  resolveFrameHeader,
+  resolveFrameHeadersForPath,
+} from './common/helpers';
+
+// Provider redirects land on the central app host, outside any workspace.
+const OAUTH_CALLBACK_PATH =
+  /^\/api\/integrations\/oauth\/[^/?#]+\/callback(?:[?#]|$)/;
 
 async function bootstrap() {
+  const adapter = new FastifyAdapter({
+    trustProxy: true,
+    bodyLimit: 100 * 1024 * 1024, // 100MB
+    routerOptions: {
+      maxParamLength: 1000,
+      ignoreTrailingSlash: true,
+      ignoreDuplicateSlashes: true,
+    },
+  });
+  // Added before NestFactory.create so it runs ahead of middie copying request.ip for Nest middleware.
+  adapter.getInstance().addHook('onRequest', overrideRequestIp);
+
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({
-      trustProxy: true,
-      bodyLimit: 100 * 1024 * 1024, // 100MB
-      routerOptions: {
-        maxParamLength: 1000,
-        ignoreTrailingSlash: true,
-        ignoreDuplicateSlashes: true,
-      },
-    }),
+    adapter,
     {
       rawBody: true,
-      bufferLogs: true,
+      // captures NestJS internal errors
+      logger: new InternalLogFilter(),
+      // bufferLogs must be false else pino will fail
+      // to log OnApplicationBootstrap logs
+      bufferLogs: false,
     },
   );
 
   app.useLogger(app.get(PinoLogger));
 
   app.setGlobalPrefix('api', {
-    exclude: ['robots.txt', 'share/:shareId/p/:pageSlug'],
+    exclude: [
+      'robots.txt',
+      'share/:shareId/p/:pageSlug',
+      'mcp',
+      '.well-known/oauth-authorization-server',
+      '.well-known/oauth-protected-resource',
+      '.well-known/oauth-protected-resource/mcp',
+      'docs',
+      'docs/:spaceSlug',
+      'docs/:spaceSlug/:pageSlug',
+    ],
   });
 
   const reflector = app.get(Reflector);
@@ -47,6 +76,47 @@ async function bootstrap() {
     },
   });
   await app.register(fastifyCookie);
+
+  const environmentService = app.get(EnvironmentService);
+  const frameHeader = resolveFrameHeader(
+    environmentService.isIframeEmbedAllowed(),
+    environmentService.getIframeAllowedOrigins(),
+  );
+  // Skipped routes:
+  //   /api/files/ - attachment controller sets its own CSP we'd overwrite
+  //   /share/     - public share pages are safe to embed
+  //   /docs/      - public space pages are safe to embed
+  const frameHeaderSkippedPrefixes = ['/api/files/', '/share/', '/docs/'];
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addHook('onSend', (req, reply, payload, done) => {
+      if (frameHeaderSkippedPrefixes.some((p) => req.url.startsWith(p))) {
+        return done(null, payload);
+      }
+      const path = req.url.split('?')[0];
+      // Force-denies the oauth consent screen even when the global frame header is absent.
+      for (const header of resolveFrameHeadersForPath(path, frameHeader)) {
+        reply.header(header.name, header.value);
+      }
+      done(null, payload);
+    });
+
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .addContentTypeParser(
+      'application/scim+json',
+      { parseAs: 'string' },
+      (_, body, done) => {
+        try {
+          const json = JSON.parse(body.toString());
+          done(null, json);
+        } catch (err: any) {
+          done(err);
+        }
+      },
+    );
 
   app
     .getHttpAdapter()
@@ -67,11 +137,16 @@ async function bootstrap() {
         '/api/sso/google',
         '/api/workspace/create',
         '/api/workspace/joined',
+        '/api/workspace/find-by-email',
+        '/api/integrations/slack/events',
+        '/api/integrations/slack/commands',
+        '/api/integrations/slack/interactivity',
       ];
 
       if (
         req.originalUrl.startsWith('/api') &&
-        !excludedPaths.some((path) => req.originalUrl.startsWith(path))
+        !excludedPaths.some((path) => req.originalUrl.startsWith(path)) &&
+        !OAUTH_CALLBACK_PATH.test(req.originalUrl)
       ) {
         if (!req.raw?.['workspaceId'] && req.originalUrl !== '/api') {
           throw new NotFoundException('Workspace not found');
@@ -105,8 +180,11 @@ async function bootstrap() {
   });
 
   const port = process.env.PORT || 3000;
-  await app.listen(port, '0.0.0.0', () => {
-    logger.log(`Listening on http://127.0.0.1:${port} / ${process.env.APP_URL}`);
+  const host = process.env.HOST || '0.0.0.0';
+  await app.listen(port, host, () => {
+    logger.log(
+      `Listening on http://127.0.0.1:${port} / ${process.env.APP_URL}`,
+    );
   });
 }
 

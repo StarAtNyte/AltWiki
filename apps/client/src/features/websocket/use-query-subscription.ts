@@ -12,7 +12,6 @@ import {
   invalidateOnUpdatePage,
 } from "../page/queries/page-query";
 import { RQ_KEY } from "../comment/queries/comment-query";
-import { queryClient } from "@/main.tsx";
 import { IComment } from "@/features/comment/types/comment.types";
 
 export const useQuerySubscription = () => {
@@ -24,7 +23,6 @@ export const useQuerySubscription = () => {
       const data: WebSocketEvent = event;
 
       let entity = null;
-      let queryKeyId = null;
 
       switch (data.operation) {
         case "invalidate":
@@ -32,11 +30,66 @@ export const useQuerySubscription = () => {
             queryKey: [...data.entity, data.id].filter(Boolean),
           });
           break;
-        case "invalidateComment":
-          queryClient.invalidateQueries({
-            queryKey: RQ_KEY(data.pageId),
-          });
+        case "commentCreated": {
+          const createCache = queryClient.getQueryData(
+            RQ_KEY(data.pageId),
+          ) as InfiniteData<IPagination<IComment>> | undefined;
+
+          if (createCache && createCache.pages.length > 0) {
+            const alreadyExists = createCache.pages.some((page) =>
+              page.items.some((c) => c.id === data.comment.id),
+            );
+            if (alreadyExists) break;
+
+            const lastIdx = createCache.pages.length - 1;
+            queryClient.setQueryData(RQ_KEY(data.pageId), {
+              ...createCache,
+              pages: createCache.pages.map((page, i) =>
+                i === lastIdx
+                  ? { ...page, items: [...page.items, data.comment] }
+                  : page,
+              ),
+            });
+          }
           break;
+        }
+        case "commentUpdated":
+        case "commentResolved": {
+          const updateCache = queryClient.getQueryData(
+            RQ_KEY(data.pageId),
+          ) as InfiniteData<IPagination<IComment>> | undefined;
+
+          if (updateCache) {
+            queryClient.setQueryData(RQ_KEY(data.pageId), {
+              ...updateCache,
+              pages: updateCache.pages.map((page) => ({
+                ...page,
+                items: page.items.map((comment) =>
+                  comment.id === data.comment.id ? data.comment : comment,
+                ),
+              })),
+            });
+          }
+          break;
+        }
+        case "commentDeleted": {
+          const deleteCache = queryClient.getQueryData(
+            RQ_KEY(data.pageId),
+          ) as InfiniteData<IPagination<IComment>> | undefined;
+
+          if (deleteCache) {
+            queryClient.setQueryData(RQ_KEY(data.pageId), {
+              ...deleteCache,
+              pages: deleteCache.pages.map((page) => ({
+                ...page,
+                items: page.items.filter(
+                  (comment) => comment.id !== data.commentId,
+                ),
+              })),
+            });
+          }
+          break;
+        }
         case "addTreeNode":
           invalidateOnCreatePage(data.payload.data as Partial<IPage>);
           break;
@@ -52,21 +105,23 @@ export const useQuerySubscription = () => {
         case "deleteTreeNode":
           invalidateOnDeletePage(data.payload.node.id);
           break;
-        case "updateOne":
+        case "updateOne": {
           entity = data.entity[0];
-          if (entity === "pages") {
-            // we have to do this because the usePageQuery cache key is the slugId.
-            queryKeyId = data.payload.slugId;
-          } else {
-            queryKeyId = data.id;
-          }
+          const keyIds =
+            entity === "pages" ? [data.payload.slugId, data.id] : [data.id];
 
-          // only update if data was already in cache
-          if (queryClient.getQueryData([...data.entity, queryKeyId])) {
-            queryClient.setQueryData([...data.entity, queryKeyId], {
-              ...queryClient.getQueryData([...data.entity, queryKeyId]),
-              ...data.payload,
-            });
+          for (const keyId of keyIds) {
+            if (!keyId) continue;
+            const cached = queryClient.getQueryData<Record<string, unknown>>([
+              ...data.entity,
+              keyId,
+            ]);
+            if (cached) {
+              queryClient.setQueryData([...data.entity, keyId], {
+                ...cached,
+                ...data.payload,
+              });
+            }
           }
 
           if (entity === "pages") {
@@ -78,20 +133,8 @@ export const useQuerySubscription = () => {
               data.payload.icon,
             );
           }
-
-          /*
-          queryClient.setQueriesData(
-            { queryKey: [data.entity, data.id] },
-            (oldData: any) => {
-              const update = (entity: Record<string, unknown>) =>
-                entity.id === data.id ? { ...entity, ...data.payload } : entity;
-              return Array.isArray(oldData)
-                ? oldData.map(update)
-                : update(oldData as Record<string, unknown>);
-            },
-          );
-      */
           break;
+        }
         case "refetchRootTreeNodeEvent": {
           const spaceId = data.spaceId;
           queryClient.refetchQueries({
@@ -103,30 +146,11 @@ export const useQuerySubscription = () => {
           });
           break;
         }
-        case "resolveComment": {
-          const currentComments = queryClient.getQueryData(
-            RQ_KEY(data.pageId),
-          ) as IPagination<IComment>;
-
-          if (currentComments && currentComments.items) {
-            const updatedComments = currentComments.items.map((comment) =>
-              comment.id === data.commentId
-                ? { 
-                    ...comment, 
-                    resolvedAt: data.resolvedAt, 
-                    resolvedById: data.resolvedById, 
-                    resolvedBy: data.resolvedBy 
-                  }
-                : comment,
-            );
-            
-            queryClient.setQueryData(RQ_KEY(data.pageId), {
-              ...currentComments,
-              items: updatedComments,
-            });
-          }
+        case "verificationUpdated":
+          queryClient.invalidateQueries({
+            queryKey: ["page-verification-info", data.pageId],
+          });
           break;
-        }
       }
     });
   }, [queryClient, socket]);

@@ -11,7 +11,6 @@ import {
   PinInput,
   Alert,
   List,
-  CopyButton,
   ActionIcon,
   Tooltip,
   Paper,
@@ -20,6 +19,7 @@ import {
   Collapse,
   UnstyledButton,
 } from "@mantine/core";
+import { CopyButton } from "@/components/common/copy-button";
 import {
   IconQrcode,
   IconShieldCheck,
@@ -36,8 +36,8 @@ import { useMutation } from "@tanstack/react-query";
 import { notifications } from "@mantine/notifications";
 import { useTranslation } from "react-i18next";
 import { setupMfa, enableMfa } from "@/ee/mfa";
-import { zodResolver } from "mantine-form-zod-resolver";
-import { z } from "zod";
+import { zod4Resolver } from "mantine-form-zod-resolver";
+import { z } from "zod/v4";
 
 interface MfaSetupModalProps {
   opened: boolean;
@@ -47,7 +47,6 @@ interface MfaSetupModalProps {
 }
 
 interface SetupData {
-  secret: string;
   qrCode: string;
   manualKey: string;
 }
@@ -71,7 +70,7 @@ export function MfaSetupModal({
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
 
   const form = useForm({
-    validate: zodResolver(formSchema),
+    validate: zod4Resolver(formSchema),
     initialValues: {
       verificationCode: "",
     },
@@ -101,7 +100,6 @@ export function MfaSetupModal({
   const enableMutation = useMutation({
     mutationFn: (verificationCode: string) =>
       enableMfa({
-        secret: setupData!.secret,
         verificationCode,
       }),
     onSuccess: (data) => {
@@ -193,7 +191,7 @@ export function MfaSetupModal({
                     </Group>
                   </UnstyledButton>
 
-                  <Collapse in={manualEntryOpen}>
+                  <Collapse expanded={manualEntryOpen}>
                     <Alert
                       icon={<IconAlertCircle size={20} />}
                       color="gray"

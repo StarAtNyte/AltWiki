@@ -4,7 +4,8 @@ import QuickCreateTile from "@/features/home/components/quick-create-tile.tsx";
 import SpaceGrid from "@/features/space/components/space-grid.tsx";
 import { BackgroundPickerButton } from "@/features/background/components/background-picker.tsx";
 import { getAppName } from "@/lib/config.ts";
-import { Helmet } from "react-helmet-async";
+import { DocumentTitle } from "@/components/ui/document-title.tsx";
+import HomeAiPrompt from "@/features/home/components/home-ai-prompt";
 import { useTranslation } from "react-i18next";
 import { useAtom } from "jotai";
 import {
@@ -46,11 +47,7 @@ export default function Home() {
 
   return (
     <>
-      <Helmet>
-        <title>
-          {t("Home")} - {getAppName()}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t("Home")} />
       <div className={classes.frame}>
         <header className={classes.greeting}>
           <div>
@@ -69,6 +66,8 @@ export default function Home() {
             <BackgroundPickerButton />
           </div>
         </header>
+
+        <HomeAiPrompt />
 
         <div className={classes.row}>
           <div className={classes.colMain}>

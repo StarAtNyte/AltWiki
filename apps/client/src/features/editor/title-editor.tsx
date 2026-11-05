@@ -7,6 +7,7 @@ import { Text } from "@tiptap/extension-text";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { useAtomValue } from "jotai";
 import {
+  currentPageEditModeAtom,
   pageEditorAtom,
   titleEditorAtom,
 } from "@/features/editor/atoms/editor-atoms";
@@ -24,9 +25,9 @@ import { useTranslation } from "react-i18next";
 import EmojiCommand from "@/features/editor/extensions/emoji-command.ts";
 import { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter.ts";
-import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { searchSpotlight } from "@/features/search/constants.ts";
+import { platformModifierKey } from "@/lib";
 
 export interface TitleEditorProps {
   pageId: string;
@@ -34,6 +35,7 @@ export interface TitleEditorProps {
   title: string;
   spaceSlug: string;
   editable: boolean;
+  isBase?: boolean;
 }
 
 export function TitleEditor({
@@ -42,6 +44,7 @@ export function TitleEditor({
   title,
   spaceSlug,
   editable,
+  isBase,
 }: TitleEditorProps) {
   const { t } = useTranslation();
   const { mutateAsync: updateTitlePageMutationAsync } =
@@ -51,9 +54,7 @@ export function TitleEditor({
   const emit = useQueryEmit();
   const navigate = useNavigate();
   const [activePageId, setActivePageId] = useState(pageId);
-  const [currentUser] = useAtom(currentUserAtom);
-  const userPageEditMode =
-    currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+  const currentPageEditMode = useAtomValue(currentPageEditModeAtom);
 
   const titleEditor = useEditor({
     extensions: [
@@ -65,7 +66,7 @@ export function TitleEditor({
       }),
       Text,
       Placeholder.configure({
-        placeholder: t("Untitled"),
+        placeholder: isBase ? t("Untitled base") : t("Untitled"),
         showOnlyWhenEditable: false,
       }),
       History.configure({
@@ -85,16 +86,20 @@ export function TitleEditor({
     },
     editable: editable,
     content: title,
+    textDirection: "auto",
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
+      attributes: {
+        "aria-label": t("Page title"),
+      },
       handleDOMEvents: {
         keydown: (_view, event) => {
-          if ((event.ctrlKey || event.metaKey) && event.code === "KeyS") {
+          if (platformModifierKey(event) && event.code === "KeyS") {
             event.preventDefault();
             return true;
           }
-          if ((event.ctrlKey || event.metaKey) && event.code === "KeyK") {
+          if (platformModifierKey(event) && event.code === "KeyK") {
             searchSpotlight.open();
             return true;
           }
@@ -104,11 +109,17 @@ export function TitleEditor({
   });
 
   useEffect(() => {
-    const anchorId = window.location.hash
-      ? window.location.hash.substring(1)
-      : undefined;
-    const pageSlug = buildPageUrl(spaceSlug, slugId, title, anchorId);
-    navigate(pageSlug, { replace: true });
+    // Canonicalize only the path slug; keep query params (?row=, ?view=
+    // deep links) and the hash anchor intact.
+    const pageSlug = buildPageUrl(spaceSlug, slugId, title);
+    navigate(
+      {
+        pathname: pageSlug,
+        search: window.location.search,
+        hash: window.location.hash,
+      },
+      { replace: true },
+    );
   }, [title]);
 
   const saveTitle = useCallback(() => {
@@ -138,7 +149,8 @@ export function TitleEditor({
         },
       };
 
-      if (page.title !== titleEditor.getText()) return;
+      if (!titleEditor.isDestroyed && page.title !== titleEditor.getText())
+        return;
 
       updatePageData(page);
 
@@ -150,15 +162,21 @@ export function TitleEditor({
   const debounceUpdate = useDebouncedCallback(saveTitle, 500);
 
   useEffect(() => {
-    if (titleEditor && title !== titleEditor.getText()) {
+    if (
+      titleEditor &&
+      !titleEditor.isDestroyed &&
+      title !== titleEditor.getText()
+    ) {
       titleEditor.commands.setContent(title);
     }
   }, [pageId, title, titleEditor]);
 
   useEffect(() => {
     setTimeout(() => {
-      titleEditor?.commands.focus("end");
-    }, 500);
+      // guard against Cannot access view['hasFocus'] error
+      if (!titleEditor?.isInitialized) return;
+      titleEditor?.commands?.focus("end");
+    }, 300);
   }, [titleEditor]);
 
   useEffect(() => {
@@ -169,15 +187,9 @@ export function TitleEditor({
   }, [pageId]);
 
   useEffect(() => {
-    // honor user default page edit mode preference
-    if (userPageEditMode && titleEditor && editable) {
-      if (userPageEditMode === PageEditMode.Edit) {
-        titleEditor.setEditable(true);
-      } else if (userPageEditMode === PageEditMode.Read) {
-        titleEditor.setEditable(false);
-      }
-    }
-  }, [userPageEditMode, titleEditor, editable]);
+    if (!titleEditor) return;
+    titleEditor.setEditable(editable && currentPageEditMode === PageEditMode.Edit);
+  }, [currentPageEditMode, titleEditor, editable]);
 
   const openSearchDialog = () => {
     const event = new CustomEvent("openFindDialogFromEditor", {});
@@ -239,15 +251,17 @@ export function TitleEditor({
   }
 
   return (
-    <EditorContent
-      editor={titleEditor}
-      onKeyDown={(event) => {
-        // First handle the search hotkey
-        getHotkeyHandler([["mod+F", openSearchDialog]])(event);
+    <div className="page-title">
+      <EditorContent
+        editor={titleEditor}
+        onKeyDown={(event) => {
+          // First handle the search hotkey
+          getHotkeyHandler([["mod+F", openSearchDialog]])(event);
 
-        // Then handle other key events
-        handleTitleKeyDown(event);
-      }}
-    />
+          // Then handle other key events
+          handleTitleKeyDown(event);
+        }}
+      />
+    </div>
   );
 }

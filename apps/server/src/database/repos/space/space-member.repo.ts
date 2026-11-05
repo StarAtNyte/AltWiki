@@ -1,4 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { dbOrTx } from '@docmost/db/utils';
@@ -10,9 +12,14 @@ import {
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '../../pagination/pagination-options';
 import { MemberInfo, UserSpaceRole } from './types';
-import { executeWithPagination } from '@docmost/db/pagination/pagination';
+import { executeWithCursorPagination } from '@docmost/db/pagination/cursor-pagination';
 import { GroupRepo } from '@docmost/db/repos/group/group.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
+import { CacheOptions, withCache } from '../../../common/helpers/with-cache';
+import {
+  CacheKey,
+  PERMISSION_CACHE_TTL_MS,
+} from '../../../common/helpers/cache-keys';
 
 @Injectable()
 export class SpaceMemberRepo {
@@ -20,6 +27,7 @@ export class SpaceMemberRepo {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly groupRepo: GroupRepo,
     private readonly spaceRepo: SpaceRepo,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   async insertSpaceMember(
@@ -38,8 +46,10 @@ export class SpaceMemberRepo {
     updatableSpaceMember: UpdatableSpaceMember,
     spaceMemberId: string,
     spaceId: string,
+    trx?: KyselyTransaction,
   ): Promise<void> {
-    await this.db
+    const db = dbOrTx(this.db, trx);
+    await db
       .updateTable('spaceMembers')
       .set(updatableSpaceMember)
       .where('id', '=', spaceMemberId)
@@ -73,8 +83,9 @@ export class SpaceMemberRepo {
   async removeSpaceMemberById(
     memberId: string,
     spaceId: string,
-    trx?: KyselyTransaction,
+    opts?: { trx?: KyselyTransaction },
   ): Promise<void> {
+    const { trx } = opts;
     const db = dbOrTx(this.db, trx);
     await db
       .deleteFrom('spaceMembers')
@@ -83,8 +94,13 @@ export class SpaceMemberRepo {
       .execute();
   }
 
-  async roleCountBySpaceId(role: string, spaceId: string): Promise<number> {
-    const { count } = await this.db
+  async roleCountBySpaceId(
+    role: string,
+    spaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<number> {
+    const db = dbOrTx(this.db, trx);
+    const { count } = await db
       .selectFrom('spaceMembers')
       .select((eb) => eb.fn.count('role').as('count'))
       .where('role', '=', role)
@@ -98,11 +114,12 @@ export class SpaceMemberRepo {
     spaceId: string,
     pagination: PaginationOptions,
   ) {
-    let query = this.db
+    let baseQuery = this.db
       .selectFrom('spaceMembers')
       .leftJoin('users', 'users.id', 'spaceMembers.userId')
       .leftJoin('groups', 'groups.id', 'spaceMembers.groupId')
       .select([
+        'spaceMembers.id as id',
         'users.id as userId',
         'users.name as userName',
         'users.avatarUrl as userAvatarUrl',
@@ -114,12 +131,21 @@ export class SpaceMemberRepo {
         'spaceMembers.createdAt',
       ])
       .select((eb) => this.groupRepo.withMemberCount(eb))
-      .where('spaceId', '=', spaceId)
-      .orderBy((eb) => eb('groups.id', 'is not', null), 'desc')
-      .orderBy('spaceMembers.createdAt', 'asc');
+      .select(
+        sql<number>`case when groups.id is not null then 1 else 0 end`.as(
+          'isGroup',
+        ),
+      )
+      .select(
+        sql<number>`case "space_members"."role" when 'admin' then 1 when 'writer' then 2 when 'reader' then 3 else 4 end`.as(
+          'roleOrder',
+        ),
+      )
+      .select(sql<string>`coalesce(users.name, groups.name)`.as('memberName'))
+      .where('spaceId', '=', spaceId);
 
     if (pagination.query) {
-      query = query.where((eb) =>
+      baseQuery = baseQuery.where((eb) =>
         eb(
           sql`f_unaccent(users.name)`,
           'ilike',
@@ -138,9 +164,24 @@ export class SpaceMemberRepo {
       );
     }
 
-    const result = await executeWithPagination(query, {
-      page: pagination.page,
+    const query = this.db.selectFrom(baseQuery.as('sub')).selectAll('sub');
+
+    const result = await executeWithCursorPagination(query, {
       perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'sub.roleOrder', direction: 'asc', key: 'roleOrder' },
+        { expression: 'sub.isGroup', direction: 'desc', key: 'isGroup' },
+        { expression: 'sub.memberName', direction: 'asc', key: 'memberName' },
+        { expression: 'sub.id', direction: 'asc', key: 'id' },
+      ],
+      parseCursor: (cursor) => ({
+        roleOrder: parseInt(cursor.roleOrder, 10),
+        isGroup: parseInt(cursor.isGroup, 10),
+        memberName: cursor.memberName,
+        id: cursor.id,
+      }),
     });
 
     let memberInfo: MemberInfo;
@@ -187,26 +228,78 @@ export class SpaceMemberRepo {
   async getUserSpaceRoles(
     userId: string,
     spaceId: string,
+    opts?: CacheOptions,
   ): Promise<UserSpaceRole[]> {
-    const roles = await this.db
+    return withCache(
+      this.cacheManager,
+      CacheKey.SPACE_ROLES(userId, spaceId),
+      PERMISSION_CACHE_TTL_MS,
+      async () => {
+        const roles = await this.db
+          .selectFrom('spaceMembers')
+          .select(['userId', 'role'])
+          .where('userId', '=', userId)
+          .where('spaceId', '=', spaceId)
+          .unionAll(
+            this.db
+              .selectFrom('spaceMembers')
+              .innerJoin(
+                'groupUsers',
+                'groupUsers.groupId',
+                'spaceMembers.groupId',
+              )
+              .select(['groupUsers.userId', 'spaceMembers.role'])
+              .where('groupUsers.userId', '=', userId)
+              .where('spaceMembers.spaceId', '=', spaceId),
+          )
+          .execute();
+
+        if (!roles || roles.length === 0) {
+          return undefined;
+        }
+        return roles;
+      },
+      opts,
+    );
+  }
+
+  async getUserIdsWithSpaceAccess(
+    userIds: string[],
+    spaceId: string,
+  ): Promise<Set<string>> {
+    if (userIds.length === 0) return new Set();
+
+    const rows = await this.db
       .selectFrom('spaceMembers')
-      .select(['userId', 'role'])
-      .where('userId', '=', userId)
+      .select('userId')
+      .where('userId', 'in', userIds)
       .where('spaceId', '=', spaceId)
       .unionAll(
         this.db
           .selectFrom('spaceMembers')
           .innerJoin('groupUsers', 'groupUsers.groupId', 'spaceMembers.groupId')
-          .select(['groupUsers.userId', 'spaceMembers.role'])
-          .where('groupUsers.userId', '=', userId)
+          .select('groupUsers.userId')
+          .where('groupUsers.userId', 'in', userIds)
           .where('spaceMembers.spaceId', '=', spaceId),
       )
       .execute();
 
-    if (!roles || roles.length === 0) {
-      return undefined;
-    }
-    return roles;
+    return new Set(rows.map((r) => r.userId));
+  }
+
+  async getSpaceIdsByGroupIds(
+    groupIds: string[],
+    opts?: { trx?: KyselyTransaction },
+  ): Promise<string[]> {
+    if (groupIds.length === 0) return [];
+    const rows = await dbOrTx(this.db, opts?.trx)
+      .selectFrom('spaceMembers')
+      .select('spaceId')
+      .distinct()
+      .where('groupId', 'in', groupIds)
+      .execute();
+
+    return rows.map((r) => r.spaceId);
   }
 
   getUserSpaceIdsQuery(userId: string) {
@@ -230,13 +323,43 @@ export class SpaceMemberRepo {
     return membership.map((space) => space.id);
   }
 
+  async getUserRolesForSpaces(
+    userId: string,
+    spaceIds: string[],
+  ): Promise<{ spaceId: string; role: string }[]> {
+    if (spaceIds.length === 0) return [];
+
+    return this.db
+      .selectFrom('spaceMembers')
+      .select(['spaceId', 'role'])
+      .where('userId', '=', userId)
+      .where('spaceId', 'in', spaceIds)
+      .unionAll(
+        this.db
+          .selectFrom('spaceMembers')
+          .innerJoin(
+            'groupUsers',
+            'groupUsers.groupId',
+            'spaceMembers.groupId',
+          )
+          .select(['spaceMembers.spaceId', 'spaceMembers.role'])
+          .where('groupUsers.userId', '=', userId)
+          .where('spaceMembers.spaceId', 'in', spaceIds),
+      )
+      .execute();
+  }
+
   async getUserSpaces(userId: string, pagination: PaginationOptions) {
     let query = this.db
       .selectFrom('spaces')
       .selectAll()
       .select((eb) => [this.spaceRepo.withMemberCount(eb)])
+      // AltWiki: also list OPEN spaces (visible to all workspace members),
+      // flagged with is_member so the client can offer "Join". Personal spaces
+      // are never listed for non-members. Ordering stays on the cursor fields
+      // (name, id) required by cursor pagination.
       .select(
-        sql`EXISTS (
+        sql<boolean>`EXISTS (
           SELECT 1 FROM space_members
           WHERE space_members.space_id = spaces.id AND space_members.user_id = ${userId}
           UNION
@@ -246,14 +369,23 @@ export class SpaceMemberRepo {
         )`.as('is_member'),
       )
       .where((eb) =>
-        eb('id', 'in', this.getUserSpaceIdsQuery(userId)).or(
-          'visibility',
-          '=',
-          'open',
-        ),
-      )
-      .orderBy(sql`is_member`, 'desc')
-      .orderBy('createdAt', 'asc');
+        eb.or([
+          eb('id', 'in', this.getUserSpaceIdsQuery(userId)),
+          eb.and([
+            eb('visibility', '=', 'open'),
+            eb('isPersonal', '=', false),
+            eb('deletedAt', 'is', null),
+            eb(
+              'workspaceId',
+              '=',
+              eb
+                .selectFrom('users')
+                .select('users.workspaceId')
+                .where('users.id', '=', userId),
+            ),
+          ]),
+        ]),
+      );
 
     if (pagination.query) {
       query = query.where((eb) =>
@@ -269,9 +401,15 @@ export class SpaceMemberRepo {
       );
     }
 
-    return executeWithPagination(query, {
-      page: pagination.page,
+    return executeWithCursorPagination(query, {
       perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'name', direction: 'asc' },
+        { expression: 'id', direction: 'asc' },
+      ],
+      parseCursor: (cursor) => ({ name: cursor.name, id: cursor.id }),
     });
   }
 }

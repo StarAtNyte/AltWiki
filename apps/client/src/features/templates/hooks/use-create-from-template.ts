@@ -8,7 +8,7 @@ import { invalidateOnCreatePage } from "@/features/page/queries/page-query";
 import { useAtom } from "jotai";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { SpaceTreeNode } from "@/features/page/tree/types";
-import { SimpleTree } from "react-arborist";
+import { treeModel } from "@/features/page/tree/model/tree-model";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 
 interface CreateFromTemplateParams {
@@ -39,7 +39,7 @@ export function useCreateFromTemplate() {
       invalidateOnCreatePage(page);
 
       // Add the new page to the tree data atom directly
-      const treeApi = new SimpleTree<SpaceTreeNode>(treeData);
+      let nextTree: SpaceTreeNode[] = treeData;
 
       // Create the tree node data
       const nodeData: SpaceTreeNode = {
@@ -59,24 +59,20 @@ export function useCreateFromTemplate() {
       let index = 0;
 
       if (parentId) {
-        const parentNode = treeApi.find(parentId);
+        const parentNode = treeModel.find(nextTree, parentId);
         if (parentNode) {
           index = parentNode.children?.length || 0;
         }
       } else {
         // Root level page
-        index = treeApi.data.length;
+        index = nextTree.length;
       }
 
       // Add the node to the tree
-      treeApi.create({
-        parentId,
-        index,
-        data: nodeData,
-      });
+      nextTree = treeModel.insert(nextTree, parentId, nodeData, index);
 
       // Update the tree data
-      setTreeData(treeApi.data);
+      setTreeData(nextTree);
 
       // Emit websocket event to sync with other users
       setTimeout(() => {

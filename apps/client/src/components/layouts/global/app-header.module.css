@@ -68,3 +68,37 @@
 .toggle {
   color: var(--app-text-2);
 }
+
+/* Round glass buttons on the right (AI chat, notifications). */
+.iconButton,
+.end :global(.mantine-ActionIcon-root) {
+  width: rem(36px);
+  height: rem(36px);
+  min-width: rem(36px);
+  min-height: rem(36px);
+  border-radius: 50%;
+  color: var(--app-text-2);
+  background: var(--app-glass-soft-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  box-shadow: var(--app-glass-soft-shadow);
+  transition: background var(--app-transition-fast);
+
+  @mixin hover {
+    background: var(--app-glass-strong-bg);
+    color: var(--app-ink);
+  }
+}
+
+/* Space/page routes have less width (sidebar open): narrow the search pill so
+   the workspace name beside the bell is not truncated. */
+.inner:not([data-home]) .center {
+  width: 100%;
+  max-width: rem(400px);
+  justify-self: center;
+
+  & > * {
+    width: 100%;
+    max-width: 100%;
+  }
+}

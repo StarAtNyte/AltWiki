@@ -149,6 +149,16 @@
   text-overflow: ellipsis;
 }
 
+.time {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: rem(12px);
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .meta {
   font-size: rem(12.5px);
   line-height: 1.45;

@@ -25,7 +25,7 @@ export default function ContinueReadingTile() {
   const bg = useAtomValue(backgroundAtom);
   const { data, isLoading } = useRecentChangesQuery();
 
-  const items = data?.items ?? [];
+  const items = data?.pages?.[0]?.items ?? [];
   // Prefer the last page this user touched; fall back to the latest change.
   const page =
     items.find((p) => p.lastUpdatedById === user?.id) ?? items[0] ?? null;

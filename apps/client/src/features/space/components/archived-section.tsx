@@ -40,7 +40,7 @@ export default function ArchivedSection({
         </Badge>
       </UnstyledButton>
 
-      <Collapse in={opened}>
+      <Collapse expanded={opened}>
         <div className={classes.content}>{children}</div>
       </Collapse>
     </div>

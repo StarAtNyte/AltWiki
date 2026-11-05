@@ -8,7 +8,7 @@ import {
 } from "@/features/workspace/queries/workspace-query.ts";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
-import { useClipboard } from "@mantine/hooks";
+import { useClipboard } from "@/hooks/use-clipboard";
 import { getInviteLink } from "@/features/workspace/services/workspace-service.ts";
 import useUserRole from "@/hooks/use-user-role.tsx";
 import { isCloud } from "@/lib/config.ts";
@@ -26,7 +26,9 @@ export default function InviteActionMenu({ invitationId }: Props) {
   const handleCopyLink = async (invitationId: string) => {
     try {
       const link = await getInviteLink({ invitationId });
-      clipboard.copy(link.inviteLink);
+      const url = new URL(link.inviteLink);
+      const inviteLink = `${window.location.origin}${url.pathname}${url.search}`;
+      clipboard.copy(inviteLink);
       notifications.show({ message: t("Link copied") });
     } catch (err) {
       notifications.show({
@@ -71,7 +73,11 @@ export default function InviteActionMenu({ invitationId }: Props) {
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="subtle" c="gray">
+          <ActionIcon
+            variant="subtle"
+            c="gray"
+            aria-label={t("Invite actions")}
+          >
             <IconDots size={20} stroke={2} />
           </ActionIcon>
         </Menu.Target>

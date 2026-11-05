@@ -15,13 +15,9 @@ import { InfiniteData } from "@tanstack/react-query";
 import { IFileTask } from '@/features/file-task/types/file-task.types.ts';
 import { IAttachment } from '@/features/attachments/types/attachment.types.ts';
 
-export interface CreatePageData {
-  spaceId: string;
-  title?: string;
-  icon?: string;
-  parentPageId?: string;
+export type CreatePageData = Partial<IPage> & {
   markdownContent?: string;
-}
+};
 
 export async function createPage(data: CreatePageData): Promise<IPage> {
   const req = await api.post<IPage>("/pages/create", data);
@@ -81,22 +77,19 @@ export async function getAllSidebarPages(
   params: SidebarPagesParams,
   fetchAllPages = true,
 ): Promise<InfiniteData<IPagination<IPage>, unknown>> {
-  let page = 1;
-  let hasNextPage = false;
+  let cursor: string | undefined = undefined;
   const pages: IPagination<IPage>[] = [];
-  const pageParams: number[] = [];
+  const pageParams: (string | undefined)[] = [];
 
   do {
-    const req = await api.post("/pages/sidebar-pages", { ...params, page: page });
+    const req = await api.post("/pages/sidebar-pages", { ...params, cursor, limit: 100 });
 
     const data: IPagination<IPage> = req.data;
     pages.push(data);
-    pageParams.push(page);
+    pageParams.push(cursor);
 
-    hasNextPage = data.meta.hasNextPage;
-
-    page += 1;
-  } while (hasNextPage && fetchAllPages);
+    cursor = data.meta.nextCursor ?? undefined;
+  } while (cursor && fetchAllPages);
 
   return {
     pageParams,
@@ -112,14 +105,40 @@ export async function getPageBreadcrumbs(
 }
 
 export async function getRecentChanges(
-  spaceId?: string,
+  params?: QueryParams & { spaceId?: string },
 ): Promise<IPagination<IPage>> {
-  const req = await api.post("/pages/recent", { spaceId });
+  const req = await api.post("/pages/recent", params);
+  return req.data;
+}
+
+export async function getCreatedByPages(
+  params?: QueryParams & { userId?: string; spaceId?: string },
+): Promise<IPagination<IPage>> {
+  const req = await api.post("/pages/created-by-user", params);
   return req.data;
 }
 
 export async function exportPage(data: IExportPageParams): Promise<void> {
   const req = await api.post("/pages/export", data, {
+    responseType: "blob",
+  });
+
+  const fileName = req?.headers["content-disposition"]
+    .split("filename=")[1]
+    .replace(/"/g, "");
+
+  let decodedFileName = fileName;
+  try {
+    decodedFileName = decodeURIComponent(fileName);
+  } catch (err) {
+    // fallback to raw filename
+  }
+
+  saveAs(req.data, decodedFileName);
+}
+
+export async function exportPageToDocx(data: { pageId: string }): Promise<void> {
+  const req = await api.post("/docx-export", data, {
     responseType: "blob",
   });
 
@@ -167,6 +186,15 @@ export async function importZip(
     },
   });
 
+  return req.data;
+}
+
+export async function getAttachmentInfo(
+  attachmentId: string,
+): Promise<IAttachment> {
+  const req = await api.post<IAttachment>("/files/info", {
+    attachmentId,
+  });
   return req.data;
 }
 

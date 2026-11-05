@@ -1,4 +1,5 @@
 import { StarterKit } from '@tiptap/starter-kit';
+import { Document } from '@tiptap/extension-document';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { Superscript } from '@tiptap/extension-superscript';
 import SubScript from '@tiptap/extension-subscript';
@@ -24,6 +25,9 @@ import {
   CustomTable,
   TiptapImage,
   TiptapVideo,
+  TiptapAudio,
+  TiptapPdf,
+  PageBreak,
   TrailingNode,
   Attachment,
   Drawio,
@@ -32,30 +36,61 @@ import {
   Mention,
   Subpages,
   Highlight,
+  Indent,
   UniqueID,
+  Columns,
+  Column,
+  Status,
   addUniqueIdsToDoc,
+  htmlToMarkdown,
+  TransclusionSource,
+  TransclusionReference,
+  BaseEmbed,
+  Footnotes,
+  Footnote,
+  FootnoteReference,
+  IntegrationCard,
+  IntegrationMention,
+  Tabs,
+  Tab,
+  TabLabel,
+  TabPanel,
 } from '@docmost/editor-ext';
-import { generateText, getSchema, JSONContent } from '@tiptap/core';
+import {
+  extensions as coreExtensions,
+  generateText,
+  getSchema,
+  JSONContent,
+} from '@tiptap/core';
 import { generateHTML, generateJSON } from '../common/helpers/prosemirror/html';
+import { collapseBlankLines } from '../common/helpers';
 // @tiptap/html library works best for generating prosemirror json state but not HTML
 // see: https://github.com/ueberdosis/tiptap/issues/5352
 // see:https://github.com/ueberdosis/tiptap/issues/4089
 //import { generateJSON } from '@tiptap/html';
-import { Node } from '@tiptap/pm/model';
+import { Node, Schema } from '@tiptap/pm/model';
+import * as Y from 'yjs';
+import { Logger } from '@nestjs/common';
 
 export const tiptapExtensions = [
+  coreExtensions.TextDirection.configure({ direction: 'auto' }),
   StarterKit.configure({
+    document: false,
     codeBlock: false,
     link: false,
     trailingNode: false,
     heading: false,
   }),
+  Document.extend({
+    content: 'block+ footnotes?',
+  }),
   Heading,
   UniqueID.configure({
-    types: ['heading', 'paragraph'],
+    types: ['heading', 'paragraph', 'transclusionSource'],
   }),
   Comment,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
+  Indent,
   TaskList,
   TaskItem.configure({
     nested: true,
@@ -73,6 +108,10 @@ export const tiptapExtensions = [
   Details,
   DetailsContent,
   DetailsSummary,
+  Tabs,
+  Tab,
+  TabLabel,
+  TabPanel,
   CustomTable,
   TableCell,
   TableRow,
@@ -80,6 +119,9 @@ export const tiptapExtensions = [
   Youtube,
   TiptapImage,
   TiptapVideo,
+  TiptapAudio,
+  TiptapPdf,
+  PageBreak,
   Callout,
   Attachment,
   CustomCodeBlock,
@@ -88,6 +130,17 @@ export const tiptapExtensions = [
   Embed,
   Mention,
   Subpages,
+  Columns,
+  Column,
+  Status,
+  TransclusionSource,
+  TransclusionReference,
+  BaseEmbed,
+  Footnotes,
+  Footnote,
+  FootnoteReference,
+  IntegrationCard,
+  IntegrationMention
 ] as any;
 
 export function jsonToHtml(tiptapJson: any) {
@@ -106,13 +159,107 @@ export function htmlToJson(html: string) {
 }
 
 export function jsonToText(tiptapJson: JSONContent) {
-  return generateText(tiptapJson, tiptapExtensions);
+  return collapseBlankLines(generateText(tiptapJson, tiptapExtensions));
 }
 
 export function jsonToNode(tiptapJson: JSONContent) {
-  return Node.fromJSON(getSchema(tiptapExtensions), tiptapJson);
+  const schema = getSchema(tiptapExtensions);
+  try {
+    return Node.fromJSON(schema, tiptapJson);
+  } catch (error) {
+    if (
+      error instanceof RangeError &&
+      error.message.includes('Unknown node type')
+    ) {
+      Logger.warn('Stripping unknown node types from document:', error.message);
+      const cleanedJson = stripUnknownNodes(tiptapJson, schema);
+      return Node.fromJSON(schema, cleanedJson);
+    }
+    throw error;
+  }
 }
 
 export function getPageId(documentName: string) {
   return documentName.split('.')[1];
+}
+
+export function isEmptyParagraphDoc(tiptapJson: JSONContent): boolean {
+  if (!tiptapJson || tiptapJson.type !== 'doc') return false;
+  const content = tiptapJson.content;
+  if (!Array.isArray(content) || content.length !== 1) return false;
+  const child = content[0];
+  if (!child || child.type !== 'paragraph') return false;
+  return (
+    !child.content ||
+    (Array.isArray(child.content) && child.content.length === 0)
+  );
+}
+
+function stripUnknownNodes(
+  json: JSONContent,
+  schema: Schema,
+): JSONContent | null {
+  if (!json || typeof json !== 'object') return json;
+
+  // Recursively clean children first, flattening any unwrapped content
+  if (json.content && Array.isArray(json.content)) {
+    const newContent: JSONContent[] = [];
+    for (const child of json.content) {
+      const cleaned = stripUnknownNodes(child, schema);
+      if (Array.isArray(cleaned)) {
+        newContent.push(...cleaned);
+      } else if (cleaned) {
+        newContent.push(cleaned);
+      }
+    }
+    json.content = newContent;
+  }
+
+  // Check if this node is unknown AFTER processing children
+  if (json.type && !schema.nodes[json.type]) {
+    // Unwrap: return cleaned children directly instead of wrapping
+    return (
+      json.content && json.content.length > 0 ? json.content : null
+    ) as any;
+  }
+
+  return json;
+}
+
+export function prosemirrorNodeToYElement(node: any): Y.XmlElement | Y.XmlText {
+  if (node.type === 'text') {
+    const ytext = new Y.XmlText();
+    ytext.insert(0, node.text || '');
+    if (node.marks?.length > 0) {
+      const attrs: Record<string, any> = {};
+      for (const mark of node.marks) {
+        attrs[mark.type] = mark.attrs || true;
+      }
+      ytext.format(0, node.text?.length || 0, attrs);
+    }
+    return ytext;
+  }
+
+  const element = new Y.XmlElement(node.type);
+  if (node.attrs) {
+    for (const [key, value] of Object.entries(node.attrs)) {
+      if (value !== null && value !== undefined) {
+        element.setAttribute(key, value as any);
+      }
+    }
+  }
+  if (node.content?.length > 0) {
+    const children = node.content.map(prosemirrorNodeToYElement);
+    element.insert(0, children);
+  }
+  return element;
+}
+
+export function jsonToMarkdown(tiptapJson: any): string {
+  const html = jsonToHtml(tiptapJson);
+  return htmlToMarkdown(html);
+}
+
+export function isRenderableObject(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

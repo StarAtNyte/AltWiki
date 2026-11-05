@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { EnvironmentService } from './integrations/environment/environment.service';
+import { AuditActorInterceptor } from './common/interceptors/audit-actor.interceptor';
 import { CoreModule } from './core/core.module';
 import { EnvironmentModule } from './integrations/environment/environment.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
+import { CollabAccessModule } from './collaboration/collab-access.module';
 import { WsModule } from './ws/ws.module';
 import { DatabaseModule } from '@docmost/db/database.module';
 import { StorageModule } from './integrations/storage/storage.module';
@@ -18,7 +22,15 @@ import { SecurityModule } from './integrations/security/security.module';
 import { TelemetryModule } from './integrations/telemetry/telemetry.module';
 import { RedisModule } from '@nestjs-labs/nestjs-ioredis';
 import { RedisConfigService } from './integrations/redis/redis-config.service';
+import { CacheModule } from '@nestjs/cache-manager';
+import KeyvRedis, { defaultReconnectStrategy } from '@keyv/redis';
+import { parseRedisUrl } from './common/helpers';
 import { LoggerModule } from './common/logger/logger.module';
+import { ClsModule } from 'nestjs-cls';
+import { NoopAuditModule } from './integrations/audit/audit.module';
+import { ThrottleModule } from './integrations/throttle/throttle.module';
+import { OutboundModule } from './integrations/outbound/outbound.module';
+import { EncryptionModule } from './integrations/encryption/encryption.module';
 import { GithubDocsModule } from './integrations/github-docs/github-docs.module';
 
 const enterpriseModules = [];
@@ -37,14 +49,43 @@ try {
 
 @Module({
   imports: [
+    ClsModule.forRoot({
+      global: true,
+      middleware: { mount: true },
+    }),
     LoggerModule,
+    ...(enterpriseModules.length > 0 ? [] : [NoopAuditModule]),
     CoreModule,
     DatabaseModule,
     EnvironmentModule,
+    EncryptionModule,
     RedisModule.forRootAsync({
       useClass: RedisConfigService,
     }),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: async (environmentService: EnvironmentService) => {
+        const redisUrl = environmentService.getRedisUrl();
+        const { family, tls } = parseRedisUrl(redisUrl);
+
+        return {
+          ttl: 5 * 1000,
+          stores: [
+            new KeyvRedis({
+              url: redisUrl,
+              socket: {
+                family,
+                reconnectStrategy: defaultReconnectStrategy,
+                ...tls,
+              },
+            }),
+          ],
+        };
+      },
+      inject: [EnvironmentService],
+    }),
     CollaborationModule,
+    CollabAccessModule,
     WsModule,
     QueueModule,
     StaticModule,
@@ -60,10 +101,18 @@ try {
     EventEmitterModule.forRoot(),
     SecurityModule,
     TelemetryModule,
+    ThrottleModule,
+    OutboundModule,
     GithubDocsModule,
     ...enterpriseModules,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditActorInterceptor,
+    },
+  ],
 })
 export class AppModule {}

@@ -5,15 +5,24 @@ import {
   Skeleton,
   Text,
   TextInput,
+  Tooltip,
 } from "@mantine/core";
 import {
   IconChevronRight,
   IconDots,
+  IconEye,
+  IconEyeOff,
   IconLayoutGrid,
   IconSearch,
   IconSettings,
   IconUserPlus,
 } from "@tabler/icons-react";
+import StarButton from "@/features/favorite/components/star-button";
+import {
+  useWatchedSpaceIds,
+  useWatchSpaceMutation,
+  useUnwatchSpaceMutation,
+} from "@/features/space/queries/space-watcher-query";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import React, { useEffect, useState } from "react";
@@ -33,26 +42,67 @@ import ArchivedSection from "@/features/space/components/archived-section.tsx";
 import homeClasses from "@/features/home/components/home.module.css";
 import classes from "./all-spaces-list.module.css";
 
+function WatchButton({ spaceId, watchedIds, size = 16 }: { spaceId: string; watchedIds: Set<string>; size?: number }) {
+  const { t } = useTranslation();
+  const watchMutation = useWatchSpaceMutation();
+  const unwatchMutation = useUnwatchSpaceMutation();
+  const isWatching = watchedIds.has(spaceId);
+  const isPending = watchMutation.isPending || unwatchMutation.isPending;
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (isWatching) {
+      unwatchMutation.mutate(spaceId);
+    } else {
+      watchMutation.mutate(spaceId);
+    }
+  };
+
+  const label = isWatching ? t("Stop watching space") : t("Watch space");
+
+  return (
+    <Tooltip label={label} openDelay={250} withArrow>
+      <ActionIcon
+        variant="subtle"
+        color="gray"
+        size="sm"
+        aria-label={label}
+        aria-pressed={isWatching}
+        onClick={handleToggle}
+        loading={isPending}
+      >
+        {isWatching ? (
+          <IconEyeOff size={size} stroke={2} />
+        ) : (
+          <IconEye size={size} stroke={2} />
+        )}
+      </ActionIcon>
+    </Tooltip>
+  );
+}
+
 interface AllSpacesListProps {
   spaces: any[];
   isLoading?: boolean;
   onSearch: (query: string) => void;
-  page: number;
   hasPrevPage?: boolean;
   hasNextPage?: boolean;
-  onPageChange: (page: number) => void;
+  onNext: () => void;
+  onPrev: () => void;
 }
 
 export default function AllSpacesList({
   spaces,
   isLoading,
   onSearch,
-  page,
   hasPrevPage,
   hasNextPage,
-  onPageChange,
+  onNext,
+  onPrev,
 }: AllSpacesListProps) {
   const { t } = useTranslation();
+  const watchedIds = useWatchedSpaceIds();
   const [settingsOpened, { open: openSettings, close: closeSettings }] =
     useDisclosure(false);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(null);
@@ -84,8 +134,15 @@ export default function AllSpacesList({
     >
       <span className={classes.cardTop}>
         <SpaceAvatar name={space.name} logo={space.logo} size={36} />
-        {space.isMember ? (
+        {space.isMember !== false ? (
           <span className={classes.cardActions}>
+            <StarButton
+              type="space"
+              spaceId={space.id}
+              name={space.name}
+              size={15}
+            />
+            <WatchButton spaceId={space.id} watchedIds={watchedIds} size={15} />
             <Menu position="bottom-end" withinPortal>
               <Menu.Target>
                 <ActionIcon
@@ -202,10 +259,10 @@ export default function AllSpacesList({
 
         {spaces.length > 0 && (
           <Paginate
-            currentPage={page}
             hasPrevPage={hasPrevPage}
             hasNextPage={hasNextPage}
-            onPageChange={onPageChange}
+            onNext={onNext}
+            onPrev={onPrev}
           />
         )}
       </section>

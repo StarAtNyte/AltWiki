@@ -20,17 +20,64 @@ export interface IWorkspace {
   emailDomains: string[];
   memberCount?: number;
   plan?: string;
-  hasLicenseKey?: boolean;
   enforceMfa?: boolean;
+  aiSearch?: boolean;
+  generativeAi?: boolean;
+  disablePublicSharing?: boolean;
+  allowPublicSpaces?: boolean;
+  publicSpacesDirectory?: boolean;
+  mcpEnabled?: boolean;
+  aiChatReadOnly?: boolean;
+  aiChatWorkspaceKnowledgeOnly?: boolean;
+  enforceMcpOauth?: boolean;
+  trashRetentionDays?: number;
+  restrictApiToAdmins?: boolean;
+  allowMemberTemplates?: boolean;
+  allowPersonalSpaces?: boolean;
+  defaultPageEditMode?: string;
+  isScimEnabled?: boolean;
 }
 
 export interface IWorkspaceSettings {
   ai?: IWorkspaceAiSettings;
+  sharing?: IWorkspaceSharingSettings;
+  api?: IWorkspaceApiSettings;
+  templates?: IWorkspaceTemplateSettings;
+  spaces?: IWorkspaceSpaceSettings;
+  publicSpaces?: IWorkspacePublicSpacesSettings;
+  defaultPageEditMode?: string;
   integrations?: IWorkspaceIntegrationSettings;
+}
+
+export interface IWorkspaceApiSettings {
+  restrictToAdmins?: boolean;
 }
 
 export interface IWorkspaceAiSettings {
   search?: boolean;
+  generative?: boolean;
+  mcp?: boolean;
+  enforceMcpOauth?: boolean;
+  chat?: boolean;
+  chatReadOnly?: boolean;
+  chatWorkspaceKnowledgeOnly?: boolean;
+}
+
+export interface IWorkspaceSharingSettings {
+  disabled?: boolean;
+}
+
+export interface IWorkspaceTemplateSettings {
+  allowMemberTemplates?: boolean;
+}
+
+export interface IWorkspaceSpaceSettings {
+  allowPersonal?: boolean;
+}
+
+export interface IWorkspacePublicSpacesSettings {
+  enabled?: boolean;
+  directory?: boolean;
 }
 
 export interface IWorkspaceIntegrationSettings {
@@ -71,7 +118,6 @@ export interface IPublicWorkspace {
   hostname: string;
   enforceSso: boolean;
   authProviders: IAuthProvider[];
-  hasLicenseKey?: boolean;
 }
 
 export interface IVersion {

@@ -1,33 +1,29 @@
 import { Group } from "@mantine/core";
 import { useTranslation } from "react-i18next";
-import { Helmet } from "react-helmet-async";
-import { getAppName } from "@/lib/config";
 import { useGetSpacesQuery } from "@/features/space/queries/space-query";
 import CreateSpaceModal from "@/features/space/components/create-space-modal";
 import ImportConfluenceSpaceModal from "@/features/space/components/import-confluence-space-modal";
 import { AllSpacesList } from "@/features/space/components/spaces-page";
+import FavoriteSpacesGrid from "@/features/space/components/spaces-page/favorite-spaces-grid";
 import { usePaginateAndSearch } from "@/hooks/use-paginate-and-search";
 import useUserRole from "@/hooks/use-user-role";
+import { DocumentTitle } from "@/components/ui/document-title.tsx";
 import homeClasses from "@/features/home/components/home.module.css";
 
 export default function Spaces() {
   const { t } = useTranslation();
   const { isAdmin } = useUserRole();
-  const { search, page, setPage, handleSearch } = usePaginateAndSearch();
+  const { search, cursor, goNext, goPrev, handleSearch } = usePaginateAndSearch();
 
   const { data, isLoading } = useGetSpacesQuery({
-    page,
+    cursor,
     limit: 30,
     query: search,
   });
 
   return (
     <>
-      <Helmet>
-        <title>
-          {t("Spaces")} - {getAppName()}
-        </title>
-      </Helmet>
+      <DocumentTitle title={t("Spaces")} />
 
       <div className={homeClasses.frame}>
         <header className={homeClasses.greeting}>
@@ -45,14 +41,16 @@ export default function Spaces() {
           )}
         </header>
 
+        <FavoriteSpacesGrid />
+
         <AllSpacesList
           spaces={data?.items || []}
           isLoading={isLoading}
           onSearch={handleSearch}
-          page={page}
           hasPrevPage={data?.meta?.hasPrevPage}
           hasNextPage={data?.meta?.hasNextPage}
-          onPageChange={setPage}
+          onNext={() => goNext(data?.meta?.nextCursor)}
+          onPrev={goPrev}
         />
       </div>
     </>

@@ -18,6 +18,8 @@ import { queryClient } from "@/main.tsx";
 import { IPage } from "@/features/page/types/page.types.ts";
 import { IPagination } from "@/lib/types.ts";
 import { timeAgo } from "@/lib/time.ts";
+import { useHasFeature } from "@/ee/hooks/use-feature";
+import { Feature } from "@/ee/features";
 import classes from "./subpages-section.module.css";
 
 interface Props {
@@ -44,6 +46,23 @@ function isEmptyDoc(content: unknown): boolean {
   );
 }
 
+// True when the document embeds upstream's inline subpages node; the
+// section then stays hidden so the page never shows two subpage lists.
+function docHasSubpagesNode(content: unknown): boolean {
+  let doc: any = content;
+  if (!doc) return false;
+  if (typeof doc === "string") {
+    try {
+      doc = JSON.parse(doc);
+    } catch {
+      return false;
+    }
+  }
+  const walk = (n: any): boolean =>
+    n?.type === "subpages" || (n?.content ?? []).some(walk);
+  return walk(doc);
+}
+
 /**
  * Lists the direct subpages of a page below the editor. It is rendered
  * outside the ProseMirror document, so nothing is written into page content.
@@ -64,6 +83,14 @@ export default function SubpagesSection({
 
   const [empty, setEmpty] = useState(() => isEmptyDoc(content));
   const [editable, setEditable] = useState(false);
+  const [hasInlineList, setHasInlineList] = useState(() =>
+    docHasSubpagesNode(content),
+  );
+  // Upstream's empty-page "Get started" chips cover the empty state when
+  // these features are on; only show our hint otherwise.
+  const hasTemplates = useHasFeature(Feature.TEMPLATES);
+  const hasBases = useHasFeature(Feature.BASES);
+  const hasGetStartedChips = hasTemplates || hasBases;
 
   useEffect(() => {
     if (!editor) return;
@@ -71,11 +98,22 @@ export default function SubpagesSection({
       setEmpty(editor.isEmpty);
       setEditable(editor.isEditable);
     };
+    const scanSubpagesNode = () => {
+      let found = false;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === "subpages") found = true;
+        return !found;
+      });
+      setHasInlineList(found);
+    };
     sync();
+    scanSubpagesNode();
     editor.on("update", sync);
+    editor.on("update", scanSubpagesNode);
     editor.on("transaction", sync);
     return () => {
       editor.off("update", sync);
+      editor.off("update", scanSubpagesNode);
       editor.off("transaction", sync);
     };
   }, [editor]);
@@ -100,7 +138,7 @@ export default function SubpagesSection({
   if (isLoading) {
     return null;
   }
-  if (children.length === 0) return null;
+  if (children.length === 0 || hasInlineList) return null;
 
   return (
     <Container
@@ -109,7 +147,7 @@ export default function SubpagesSection({
       className={clsx(classes.root, empty && classes.asMain)}
       data-subpages
     >
-      {empty && editable && (
+      {empty && editable && !hasGetStartedChips && (
         <UnstyledButton
           className={classes.hint}
           onClick={() => editor?.chain().focus("start").run()}

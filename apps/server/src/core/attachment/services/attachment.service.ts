@@ -8,7 +8,6 @@ import { Readable } from 'stream';
 import { StorageService } from '../../../integrations/storage/storage.service';
 import { MultipartFile } from '@fastify/multipart';
 import {
-  compressAndResizeIcon,
   getAttachmentFolderPath,
   PreparedFile,
   prepareFile,
@@ -44,7 +43,7 @@ export class AttachmentService {
 
   async uploadFile(opts: {
     filePromise: Promise<MultipartFile>;
-    pageId: string;
+    pageId?: string;
     userId: string;
     spaceId: string;
     workspaceId: string;
@@ -71,8 +70,8 @@ export class AttachmentService {
       }
 
       if (
-        existingAttachment.pageId !== pageId &&
-        existingAttachment.fileExt !== preparedFile.fileExtension &&
+        existingAttachment.pageId !== pageId ||
+        existingAttachment.fileExt !== preparedFile.fileExtension ||
         existingAttachment.workspaceId !== workspaceId
       ) {
         throw new BadRequestException('File attachment does not match');
@@ -99,6 +98,7 @@ export class AttachmentService {
       if (isUpdate) {
         attachment = await this.attachmentRepo.updateAttachment(
           {
+            fileSize: preparedFile.fileSize,
             updatedAt: new Date(),
           },
           attachmentId,
@@ -116,8 +116,8 @@ export class AttachmentService {
         });
       }
 
-      // Only index PDFs and DOCX files
-      if (['.pdf', '.docx'].includes(attachment.fileExt.toLowerCase())) {
+      // Only index PDF, DOCX and TXT files
+      if (['.pdf', '.docx', '.txt'].includes(attachment.fileExt.toLowerCase())) {
         await this.attachmentQueue.add(
           QueueJob.ATTACHMENT_INDEX_CONTENT,
           {
@@ -153,12 +153,6 @@ export class AttachmentService {
     const preparedFile: PreparedFile = await prepareFile(filePromise);
     validateFileType(preparedFile.fileExtension, validImageExtensions);
 
-    const processedBuffer = await compressAndResizeIcon(
-      preparedFile.buffer,
-      type,
-    );
-    preparedFile.buffer = processedBuffer;
-    preparedFile.fileSize = processedBuffer.length;
     preparedFile.fileName = uuid4() + preparedFile.fileExtension;
 
     const filePath = `${getAttachmentFolderPath(type, workspaceId)}/${preparedFile.fileName}`;
@@ -246,6 +240,11 @@ export class AttachmentService {
     }
   }
 
+  async deleteAttachment(attachment: Attachment) {
+    await this.storageService.delete(attachment.filePath);
+    await this.attachmentRepo.deleteAttachmentById(attachment.id);
+  }
+
   async uploadToDrive(filePath: string, fileContent: Buffer | Readable) {
     try {
       await this.storageService.upload(filePath, fileContent);
@@ -293,6 +292,31 @@ export class AttachmentService {
       },
       trx,
     );
+  }
+
+  async handleDeleteAiChatAttachments(aiChatId: string) {
+    try {
+      const attachments = await this.attachmentRepo.findByAiChatId(aiChatId);
+      if (!attachments || attachments.length === 0) {
+        return;
+      }
+
+      await Promise.all(
+        attachments.map(async (attachment) => {
+          try {
+            await this.storageService.delete(attachment.filePath);
+            await this.attachmentRepo.deleteAttachmentById(attachment.id);
+          } catch (err) {
+            this.logger.log(
+              `DeleteAiChatAttachments: failed to delete attachment ${attachment.id}:`,
+              err,
+            );
+          }
+        }),
+      );
+    } catch (err) {
+      throw err;
+    }
   }
 
   async handleDeleteSpaceAttachments(spaceId: string) {

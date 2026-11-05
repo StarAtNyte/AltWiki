@@ -15,7 +15,8 @@
     border-color 160ms ease;
 
   &[data-scrolled] {
-    background: var(--app-glass-soft-bg) !important;
+    /* Near-opaque so scrolled content never shows through the header. */
+    background: light-dark(rgba(246, 244, 240, 0.94), rgba(20, 24, 33, 0.94)) !important;
     backdrop-filter: var(--app-blur);
     -webkit-backdrop-filter: var(--app-blur);
     border-bottom-color: var(--app-glass-border);

@@ -16,8 +16,14 @@ import {
   SpaceCaslSubject,
 } from '../interfaces/space-ability.type';
 import { findHighestUserSpaceRole } from '@docmost/db/repos/space/utils';
+import { CacheOptions } from '../../../common/helpers/with-cache';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
+
+export type SpaceAbilityOptions = CacheOptions & {
+  // AltWiki: caller-supplied visibility (already loaded, workspace-scoped space)
+  spaceVisibility?: string;
+};
 
 @Injectable()
 export default class SpaceAbilityFactory {
@@ -29,11 +35,12 @@ export default class SpaceAbilityFactory {
   async createForUser(
     user: User,
     spaceId: string,
-    opts?: { spaceVisibility?: string },
+    opts?: SpaceAbilityOptions,
   ) {
     const userSpaceRoles = await this.spaceMemberRepo.getUserSpaceRoles(
       user.id,
       spaceId,
+      opts,
     );
 
     const userSpaceRole = findHighestUserSpaceRole(userSpaceRoles);
@@ -55,6 +62,12 @@ export default class SpaceAbilityFactory {
               .selectFrom('spaces')
               .select('visibility')
               .where('id', '=', spaceId)
+              // AltWiki: OPEN = visible to authenticated members of the same
+              // workspace only (not anonymous; upstream public spaces use the
+              // separate public_spaces table). Never applies to personal spaces.
+              .where('workspaceId', '=', user.workspaceId)
+              .where('isPersonal', '=', false)
+              .where('deletedAt', 'is', null)
               .executeTakeFirst()
           )?.visibility;
 

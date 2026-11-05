@@ -26,3 +26,13 @@
     background: light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.08)) !important;
   }
 }
+
+.filterButtonActive {
+  color: var(--app-accent-text) !important;
+  background: var(--app-accent-soft) !important;
+  border-color: transparent !important;
+
+  &:hover {
+    color: var(--app-accent-text) !important;
+  }
+}

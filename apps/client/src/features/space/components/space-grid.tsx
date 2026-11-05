@@ -2,7 +2,7 @@ import { Button, Skeleton, Text } from "@mantine/core";
 import React from "react";
 import {
   prefetchSpace,
-  useGetSpacesQuery,
+  useAllSpacesQuery,
   useJoinSpaceMutation,
 } from "@/features/space/queries/space-query.ts";
 import { getSpaceUrl } from "@/lib/config.ts";
@@ -21,13 +21,16 @@ import { SpaceAvatar } from "@/components/ui/space-avatar.tsx";
 import { partitionArchivedSpaces } from "@/features/space/utils/archived-space.ts";
 import ArchivedSection from "@/features/space/components/archived-section.tsx";
 import { ISpace } from "@/features/space/types/space.types.ts";
+import StarButton from "@/features/favorite/components/star-button";
+import { useFavoriteIds } from "@/features/favorite/queries/favorite-query";
 
 export default function SpaceGrid() {
   const { t } = useTranslation();
   // Same key as the rail (space-rail.tsx): one shared request.
-  const { data, isLoading } = useGetSpacesQuery({ page: 1, limit: 100 });
+  const { data, isLoading } = useAllSpacesQuery();
   const joinSpace = useJoinSpaceMutation();
-  const { active, archived } = partitionArchivedSpaces<ISpace>(data?.items);
+  const spaceFavoriteIds = useFavoriteIds("space");
+  const { active, archived } = partitionArchivedSpaces<ISpace>(data);
 
   const renderCard = (space: ISpace) => (
     <Link
@@ -56,7 +59,20 @@ export default function SpaceGrid() {
             {t("Join")}
           </Button>
         ) : (
-          <IconChevronRight size={16} stroke={1.6} className={classes.chevron} />
+          <span className={classes.cardActions}>
+            <span
+              className={classes.starButton}
+              data-favorited={spaceFavoriteIds.has(space.id) || undefined}
+            >
+              <StarButton
+                type="space"
+                spaceId={space.id}
+                name={space.name}
+                size={15}
+              />
+            </span>
+            <IconChevronRight size={16} stroke={1.6} className={classes.chevron} />
+          </span>
         )}
       </span>
       <span className={classes.body}>

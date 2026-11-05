@@ -7,6 +7,7 @@ import { SearchSpotlight } from "@/features/search/components/search-spotlight.t
 import React, { Suspense } from "react";
 import { RouteFallback } from "@/components/layouts/global/route-fallback.tsx";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
+import { AppErrorBoundary } from "@/components/ui/app-error-boundary.tsx";
 
 export default function Layout() {
   const { spaceSlug } = useParams();
@@ -16,9 +17,11 @@ export default function Layout() {
     <UserProvider>
       <GlobalAppShell>
         {/* Lazy routes suspend here, inside the shell, so it never unmounts. */}
-        <Suspense fallback={<RouteFallback />}>
-          <Outlet />
-        </Suspense>
+        <AppErrorBoundary>
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
+        </AppErrorBoundary>
       </GlobalAppShell>
       {isCloud() && <PosthogUser />}
       <SearchSpotlight spaceId={space?.id} />

@@ -1,7 +1,8 @@
-import { useQuery, UseQueryResult } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, UseQueryResult } from "@tanstack/react-query";
 import {
   searchAttachments,
   searchPage,
+  searchPublicSpace,
   searchShare,
   searchSuggestions,
 } from '@/features/search/services/search-service';
@@ -24,13 +25,15 @@ export function usePageSearchQuery(
 }
 
 export function useSearchSuggestionsQuery(
-  params: SearchSuggestionParams,
+  params: SearchSuggestionParams & { preload?: boolean },
 ): UseQueryResult<ISuggestionResult, Error> {
+  const { preload, ...queryParams } = params;
   return useQuery({
     queryKey: ["search-suggestion", params.query],
     staleTime: 60 * 1000, // 1min
-    queryFn: () => searchSuggestions(params),
-    enabled: !!params.query,
+    queryFn: () => searchSuggestions(queryParams),
+    enabled: preload || !!params.query,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -51,5 +54,15 @@ export function useAttachmentSearchQuery(
     queryKey: ["attachment-search", params],
     queryFn: () => searchAttachments(params),
     enabled: !!params.query,
+  });
+}
+
+export function usePublicSpaceSearchQuery(
+  params: IPageSearchParams & { spaceSlug: string },
+): UseQueryResult<IPageSearch[], Error> {
+  return useQuery({
+    queryKey: ["public-space-search", params],
+    queryFn: () => searchPublicSpace(params),
+    enabled: !!params.query && !!params.spaceSlug,
   });
 }

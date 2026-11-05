@@ -20,6 +20,7 @@ import {
   Tabs,
   TextInput,
   Tooltip,
+  v8CssVariablesResolver,
 } from "@mantine/core";
 
 const blue: MantineColorsTuple = [
@@ -156,9 +157,18 @@ export const theme = createTheme({
     ActionIcon: ActionIcon.extend({
       defaultProps: { radius: "md" },
     }),
+    // Size badges to their content; fit-content collapses inside table cells.
     Badge: Badge.extend({
       defaultProps: { radius: "sm" },
-      styles: { root: { textTransform: "none", fontWeight: 600 } },
+      styles: (_theme, props) => ({
+        root: {
+          textTransform: "none",
+          fontWeight: 600,
+          ...(props.fullWidth || props.circle
+            ? {}
+            : { width: "max-content", maxWidth: "100%" }),
+        },
+      }),
     }),
     Card: Card.extend({
       defaultProps: { radius: "md" },
@@ -222,12 +232,20 @@ export const theme = createTheme({
       defaultProps: {
         radius: "sm",
         openDelay: 250,
+        events: { hover: true, focus: true, touch: false },
         transitionProps: { transition: "fade", duration: 120 },
       },
       styles: { tooltip: { fontSize: "var(--mantine-font-size-xs)" } },
     }),
     Tabs: Tabs.extend({
       styles: { tab: { fontWeight: 500 } },
+      vars: (_theme, props) => ({
+        root: {
+          ...(props.color === "dark" && {
+            "--tabs-color": "var(--mantine-color-dark-default)",
+          }),
+        },
+      }),
     }),
     SegmentedControl: SegmentedControl.extend({
       defaultProps: { radius: "md" },
@@ -264,6 +282,7 @@ export const theme = createTheme({
  */
 export const mantineCssResolver: CSSVariablesResolver = (theme) => ({
   variables: {
+    ...v8CssVariablesResolver(theme).variables,
     "--input-error-size": theme.fontSizes.sm,
     "--app-transition": "150ms cubic-bezier(0.2, 0, 0, 1)",
     "--app-transition-fast": "120ms cubic-bezier(0.2, 0, 0, 1)",
@@ -275,6 +294,17 @@ export const mantineCssResolver: CSSVariablesResolver = (theme) => ({
       '"Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif',
   },
   light: {
+    ...v8CssVariablesResolver(theme).light,
+    "--mantine-color-dimmed": "#4b5563",
+    "--mantine-color-dark-light-color": "#4e5359",
+    "--mantine-color-dark-light-hover": "var(--mantine-color-gray-light-hover)",
+    // WCAG AA contrast overrides from upstream (see Docmost v0.97 theme.ts).
+    "--mantine-color-error": "var(--mantine-color-red-7)",
+    "--mantine-color-gray-light-color": "var(--mantine-color-gray-7)",
+    "--mantine-color-placeholder": "#686868",
+    "--mantine-color-red-light-color": "var(--mantine-color-red-7)",
+    "--mantine-color-green-light-color": "#1B5E20",
+    "--mantine-color-orange-light-color": "#a63508",
     "--mantine-color-body": "#FDFCFA",
     "--mantine-color-text": "#1F2533",
     "--app-ink": "#1F2533",
@@ -318,6 +348,9 @@ export const mantineCssResolver: CSSVariablesResolver = (theme) => ({
     "--app-shadow-card-hover": "0 0 0 1px rgba(0, 0, 0, 0.14)",
   },
   dark: {
+    ...v8CssVariablesResolver(theme).dark,
+    "--mantine-color-dark-light-color": "var(--mantine-color-gray-4)",
+    "--mantine-color-dark-light-hover": "var(--mantine-color-default-hover)",
     "--app-ink": "#E6E9EF",
     "--app-text-2": "#AEB5C2",
     "--app-muted": "#7E8796",

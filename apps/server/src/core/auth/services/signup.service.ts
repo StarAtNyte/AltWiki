@@ -1,23 +1,32 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { WorkspaceService } from '../../workspace/services/workspace.service';
 import { CreateWorkspaceDto } from '../../workspace/dto/create-workspace.dto';
 import { CreateAdminUserDto } from '../dto/create-admin-user.dto';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
+import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { getWorkspaceDefaultPageEditMode } from '../../workspace/workspace.util';
 import { KyselyDB, KyselyTransaction } from '@docmost/db/types/kysely.types';
 import { executeTx } from '@docmost/db/utils';
 import { InjectKysely } from 'nestjs-kysely';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import { UserRole } from '../../../common/helpers/types/permission';
+import { AuditEvent, AuditResource } from '../../../common/events/audit-events';
+import {
+  AUDIT_SERVICE,
+  IAuditService,
+} from '../../../integrations/audit/audit.service';
 
 @Injectable()
 export class SignupService {
   constructor(
     private userRepo: UserRepo,
+    private workspaceRepo: WorkspaceRepo,
     private workspaceService: WorkspaceService,
     private groupUserRepo: GroupUserRepo,
     @InjectKysely() private readonly db: KyselyDB,
+    @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
   async signup(
@@ -36,16 +45,20 @@ export class SignupService {
       );
     }
 
-    return await executeTx(
+    const user = await executeTx(
       this.db,
       async (trx) => {
         // create user
+        const workspace = await this.workspaceRepo.findById(workspaceId, {
+          trx,
+        });
         const user = await this.userRepo.insertUser(
           {
             ...createUserDto,
             workspaceId: workspaceId,
           },
           trx,
+          { pageEditMode: getWorkspaceDefaultPageEditMode(workspace) },
         );
 
         // add user to workspace
@@ -66,6 +79,24 @@ export class SignupService {
       },
       trx,
     );
+
+    this.auditService.log({
+      event: AuditEvent.USER_CREATED,
+      resourceType: AuditResource.USER,
+      resourceId: user.id,
+      changes: {
+        after: {
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      },
+      metadata: {
+        source: 'signup',
+      },
+    });
+
+    return user;
   }
 
   async initialSetup(

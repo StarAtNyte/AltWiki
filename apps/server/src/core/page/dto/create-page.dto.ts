@@ -1,4 +1,14 @@
-import { IsOptional, IsString, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  ValidateIf,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
+
+export type ContentFormat = 'json' | 'markdown' | 'html';
 
 export class CreatePageDto {
   @IsOptional()
@@ -16,6 +26,16 @@ export class CreatePageDto {
   @IsUUID()
   spaceId: string;
 
+  @IsOptional()
+  content?: string | object;
+
+  @ValidateIf((o) => o.content !== undefined)
+  @Transform(({ value }) => value?.toLowerCase() ?? 'json')
+  @IsIn(['json', 'markdown', 'html'])
+  format?: ContentFormat = 'json';
+
+  // AltWiki legacy alias: equivalent to { content, format: 'markdown' }.
+  // Kept for the AltWiki client (templates) and github-docs generator.
   @IsOptional()
   @IsString()
   markdownContent?: string;

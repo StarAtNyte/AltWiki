@@ -8,8 +8,8 @@ import {
   IPageSearch,
   IPageSearchParams,
 } from "@/features/search/types/search.types";
-import { useLicense } from "@/ee/hooks/use-license";
-import { isCloud } from "@/lib/config";
+import { useHasFeature } from "@/ee/hooks/use-feature";
+import { Feature } from "@/ee/features";
 
 export type UnifiedSearchResult = IPageSearch | IAttachmentSearch;
 
@@ -21,10 +21,10 @@ export function useUnifiedSearch(
   params: UseUnifiedSearchParams,
   enabled: boolean = true,
 ): UseQueryResult<UnifiedSearchResult[], Error> {
-  const { hasLicenseKey } = useLicense();
+  const hasAttachmentIndexing = useHasFeature(Feature.ATTACHMENT_INDEXING);
 
   const isAttachmentSearch =
-    params.contentType === "attachment" && (isCloud() || hasLicenseKey);
+    params.contentType === "attachment" && hasAttachmentIndexing;
   const searchType = isAttachmentSearch ? "attachment" : "page";
 
   return useQuery({
@@ -39,6 +39,20 @@ export function useUnifiedSearch(
         return await searchPage(backendParams);
       }
     },
-    enabled: !!params.query && enabled,
+    enabled:
+      (!!params.query ||
+        (params.labelIds?.length ?? 0) > 0 ||
+        !!params.creatorId) &&
+      enabled,
+    // keep previous results only within the same search type; page results
+    // rendered as attachments (or vice versa) crash on missing fields
+    placeholderData: (previousData, previousQuery) => {
+      if (!params.query && !params.labelIds?.length && !params.creatorId)
+        return undefined;
+      if (previousQuery && previousQuery.queryKey[1] !== searchType) {
+        return undefined;
+      }
+      return previousData;
+    },
   });
 }

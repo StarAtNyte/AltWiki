@@ -5,12 +5,13 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   MinLength,
   ValidateIf,
   validateSync,
 } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { IsISO6391 } from '../../common/validator/is-iso6391';
+import { IsISO6391 } from '../../common/validators/is-iso6391';
 
 export class EnvironmentVariables {
   @IsNotEmpty()
@@ -49,7 +50,7 @@ export class EnvironmentVariables {
   MAIL_DRIVER: string;
 
   @IsOptional()
-  @IsIn(['local', 's3'])
+  @IsIn(['local', 's3', 'azure'])
   STORAGE_DRIVER: string;
 
   @IsOptional()
@@ -91,7 +92,6 @@ export class EnvironmentVariables {
   @ValidateIf((obj) => obj.SEARCH_DRIVER === 'typesense')
   TYPESENSE_URL: string;
 
-  @IsOptional()
   @ValidateIf((obj) => obj.SEARCH_DRIVER === 'typesense')
   @IsNotEmpty()
   @IsString()
@@ -110,18 +110,55 @@ export class EnvironmentVariables {
   AI_DRIVER: string;
 
   @IsOptional()
-  @ValidateIf((obj) => obj.AI_DRIVER)
+  @ValidateIf((obj) => obj.AI_VECTOR_DRIVER)
+  @IsIn(['pgvector', 'turbopuffer'])
   @IsString()
+  AI_VECTOR_DRIVER: string;
+
+  @ValidateIf((obj) => obj.AI_VECTOR_DRIVER === 'turbopuffer')
   @IsNotEmpty()
-  AI_EMBEDDING_MODEL: string;
+  @IsString()
+  TURBOPUFFER_API_KEY: string;
+
+  @ValidateIf(
+    (obj) =>
+      obj.AI_VECTOR_DRIVER === 'turbopuffer' && !obj.TURBOPUFFER_BASE_URL,
+  )
+  @IsNotEmpty({
+    message:
+      'TURBOPUFFER_REGION is required when AI_VECTOR_DRIVER is turbopuffer, unless TURBOPUFFER_BASE_URL is set',
+  })
+  @IsString()
+  TURBOPUFFER_REGION: string;
 
   @IsOptional()
+  @ValidateIf((obj) => obj.TURBOPUFFER_BASE_URL != '' && obj.TURBOPUFFER_BASE_URL != null)
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false })
+  TURBOPUFFER_BASE_URL: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^[A-Za-z0-9\-_.]{1,90}$/, {
+    message:
+      'TURBOPUFFER_NAMESPACE_PREFIX may only contain letters, digits, dot, dash, underscore (max 90 chars)',
+  })
+  TURBOPUFFER_NAMESPACE_PREFIX: string;
+
+  @IsOptional()
+  @IsString()
+  AI_EMBEDDING_MODEL: string;
+
   @ValidateIf((obj) => obj.AI_EMBEDDING_DIMENSION)
   @IsIn(['768', '1024', '1536', '2000', '3072'])
   @IsString()
   AI_EMBEDDING_DIMENSION: string;
 
   @IsOptional()
+  @ValidateIf((obj) => obj.AI_EMBEDDING_SUPPORTS_MRL)
+  @IsIn(['true', 'false'])
+  @IsString()
+  AI_EMBEDDING_SUPPORTS_MRL: string;
+
   @ValidateIf((obj) => obj.AI_DRIVER)
   @IsString()
   @IsNotEmpty()
@@ -145,16 +182,30 @@ export class EnvironmentVariables {
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   OPENAI_API_URL: string;
 
-  @IsOptional()
   @ValidateIf((obj) => obj.AI_DRIVER && obj.AI_DRIVER === 'gemini')
   @IsString()
   @IsNotEmpty()
   GEMINI_API_KEY: string;
 
-  @IsOptional()
   @ValidateIf((obj) => obj.AI_DRIVER && obj.AI_DRIVER === 'ollama')
   @IsUrl({ protocols: ['http', 'https'], require_tld: false })
   OLLAMA_API_URL: string;
+
+  @IsOptional()
+  @IsIn(['postgres', 'clickhouse'])
+  @IsString()
+  EVENT_STORE_DRIVER: string;
+
+  @ValidateIf((obj) => obj.EVENT_STORE_DRIVER === 'clickhouse')
+  @IsNotEmpty()
+  @IsUrl(
+    { protocols: ['http', 'https'], require_tld: false },
+    {
+      message:
+        'CLICKHOUSE_URL must be a valid URL e.g http://user:password@localhost:8123/docmost',
+    },
+  )
+  CLICKHOUSE_URL: string;
 }
 
 export function validate(config: Record<string, any>) {

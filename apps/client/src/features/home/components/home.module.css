@@ -470,3 +470,51 @@
   border-radius: var(--mantine-radius-md);
   overflow: hidden;
 }
+
+/* ---------- panel tabs (recent / favorites / created by me) ---------- */
+
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(2px);
+  min-width: 0;
+  padding: rem(3px);
+  border-radius: 999px;
+  background: var(--app-tile-bg);
+  box-shadow: 0 0 0 1px var(--app-hair);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab {
+  flex-shrink: 0;
+  height: rem(28px);
+  padding: 0 rem(12px);
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: rem(13px);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--app-text-2);
+  transition:
+    background var(--app-transition-fast),
+    color var(--app-transition-fast);
+
+  @mixin hover {
+    color: var(--app-ink);
+  }
+
+  &[data-active] {
+    color: var(--app-ink);
+    background: var(--app-glass-strong-bg);
+    box-shadow: var(--app-glass-soft-shadow);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 1px;
+  }
+}

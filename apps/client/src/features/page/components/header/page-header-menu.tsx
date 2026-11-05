@@ -1,30 +1,38 @@
-import { ActionIcon, Group, Menu, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Group, Menu, Text, ThemeIcon, Tooltip } from "@mantine/core";
 import {
   IconArrowRight,
   IconArrowsHorizontal,
   IconDots,
+  IconEye,
+  IconEyeOff,
   IconFileExport,
   IconHistory,
   IconLink,
   IconList,
   IconMarkdown,
   IconMessage,
+  IconPaperclip,
+  IconPresentation,
   IconPrinter,
+  IconStar,
+  IconStarFilled,
   IconTrash,
   IconWifiOff,
 } from "@tabler/icons-react";
-import React, { useEffect, useRef, useState } from "react";
-import useToggleAside from "@/hooks/use-toggle-aside.tsx";
+import { useEffect, useRef, useState } from "react";
+import type { Content } from "@tiptap/react";
+import { useAsideTriggerProps } from "@/hooks/use-toggle-aside.tsx";
 import { useAtom, useAtomValue } from "jotai";
 import { historyAtoms } from "@/features/page-history/atoms/history-atoms.ts";
-import { useClipboard, useDisclosure, useHotkeys } from "@mantine/hooks";
-import { useNavigate, useParams } from "react-router-dom";
+import { useDisclosure, useHotkeys } from "@mantine/hooks";
+import { useClipboard } from "@/hooks/use-clipboard";
+import { useParams } from "react-router-dom";
 import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { notifications } from "@mantine/notifications";
 import { getAppUrl } from "@/lib/config.ts";
-import { extractPageSlugId, copyToClipboard } from "@/lib";
-import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
+import { extractPageSlugId } from "@/lib";
+import { useTreeMutation } from "@/features/page/tree/hooks/use-tree-mutation.ts";
 import { useDeletePageModal } from "@/features/page/hooks/use-delete-page-modal.tsx";
 import { PageWidthToggle } from "@/features/user/components/page-width-pref.tsx";
 import { Trans, useTranslation } from "react-i18next";
@@ -33,28 +41,58 @@ import { htmlToMarkdown } from "@docmost/editor-ext";
 import {
   pageEditorAtom,
   yjsConnectionStatusAtom,
+  yjsSyncedAtom,
 } from "@/features/editor/atoms/editor-atoms.ts";
 import { formattedDate } from "@/lib/time.ts";
-import { PageStateSegmentedControl } from "@/features/user/components/page-state-pref.tsx";
+import { PageEditModeToggle } from "@/features/user/components/page-state-pref.tsx";
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
+import PageAttachmentsModal from "@/features/attachments/components/page-attachments-modal.tsx";
+import PresentationModal from "@/features/editor/components/presentation/presentation-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
-import ShareModal from "@/features/share/components/share-modal.tsx";
+import { PageShareModal } from "@/ee/page-permission";
+import {
+  PageVerificationMenuItem,
+  PageVerificationModal,
+} from "@/ee/page-verification";
+import {
+  useFavoriteIds,
+  useAddFavoriteMutation,
+  useRemoveFavoriteMutation,
+} from "@/features/favorite/queries/favorite-query";
+import {
+  useWatchStatusQuery,
+  useWatchPageMutation,
+  useUnwatchPageMutation,
+} from "@/features/page/queries/watcher-query";
 
 interface PageHeaderMenuProps {
   readOnly?: boolean;
 }
 export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
   const { t } = useTranslation();
-  const toggleAside = useToggleAside();
+  const commentsTriggerProps = useAsideTriggerProps("comments");
+  const tocTriggerProps = useAsideTriggerProps("toc");
+  const { pageSlug } = useParams();
+  const { data: page } = usePageQuery({
+    pageId: extractPageSlugId(pageSlug),
+  });
+  const isDeleted = !!page?.deletedAt;
 
   useHotkeys(
     [
       [
         "mod+F",
-        () => {
+        (keyboardEvent) => {
+          // keepMounted modals (page import) stay in the DOM while closed
+          const modalOpen = Array.from(
+            document.querySelectorAll('[aria-modal="true"]'),
+          ).some((modal) => modal.getClientRects().length > 0);
+          if (modalOpen) return;
+          keyboardEvent.preventDefault();
           const event = new CustomEvent("openFindDialogFromEditor", {});
           document.dispatchEvent(event);
         },
+        { preventDefault: false },
       ],
       [
         "Escape",
@@ -68,35 +106,43 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
     [],
   );
 
+  if (isDeleted) {
+    return null;
+  }
+
   return (
     <>
       <ConnectionWarning />
 
-      {!readOnly && <PageStateSegmentedControl size="xs" />}
+      {!readOnly && !page?.isBase && <PageEditModeToggle size="xs" />}
 
-      <ShareModal readOnly={readOnly} />
+      <PageShareModal readOnly={readOnly} />
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <ActionIcon
           variant="subtle"
           color="gray"
           size={32}
-          onClick={() => toggleAside("comments")}
+          aria-label={t("Comments")}
+          {...commentsTriggerProps}
         >
           <IconMessage size={19} stroke={1.8} />
         </ActionIcon>
       </Tooltip>
 
-      <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          size={32}
-          onClick={() => toggleAside("toc")}
-        >
-          <IconList size={19} stroke={1.8} />
-        </ActionIcon>
-      </Tooltip>
+      {!page?.isBase && (
+        <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size={32}
+            aria-label={t("Table of contents")}
+            {...tocTriggerProps}
+          >
+            <IconList size={19} stroke={1.8} />
+          </ActionIcon>
+        </Tooltip>
+      )}
 
       <PageActionMenu readOnly={readOnly} />
     </>
@@ -108,7 +154,6 @@ interface PageActionMenuProps {
 }
 function PageActionMenu({ readOnly }: PageActionMenuProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [, setHistoryModalOpen] = useAtom(historyAtoms);
   const clipboard = useClipboard({ timeout: 500 });
   const { pageSlug, spaceSlug } = useParams();
@@ -116,21 +161,40 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
     pageId: extractPageSlugId(pageSlug),
   });
   const { openDeleteModal } = useDeletePageModal();
-  const [tree] = useAtom(treeApiAtom);
+  const { handleDelete } = useTreeMutation(page?.spaceId ?? "");
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [
     movePageModalOpened,
     { open: openMovePageModal, close: closeMoveSpaceModal },
   ] = useDisclosure(false);
+  const [
+    verificationOpened,
+    { open: openVerificationModal, close: closeVerificationModal },
+  ] = useDisclosure(false);
+  const [
+    attachmentsOpened,
+    { open: openAttachmentsModal, close: closeAttachmentsModal },
+  ] = useDisclosure(false);
+  const [
+    presentationOpened,
+    { open: openPresentationModal, close: closePresentationModal },
+  ] = useDisclosure(false);
   const [pageEditor] = useAtom(pageEditorAtom);
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);
+  const favoriteIds = useFavoriteIds("page", page?.spaceId);
+  const addFavoriteMutation = useAddFavoriteMutation();
+  const removeFavoriteMutation = useRemoveFavoriteMutation();
+  const isFavorited = page?.id ? favoriteIds.has(page.id) : false;
+  const { data: watchStatus } = useWatchStatusQuery(page?.id);
+  const watchPage = useWatchPageMutation();
+  const unwatchPage = useUnwatchPageMutation();
 
   const handleCopyLink = () => {
     const pageUrl =
       getAppUrl() + buildPageUrl(spaceSlug, page.slugId, page.title);
 
-    copyToClipboard(pageUrl);
+    clipboard.copy(pageUrl);
     notifications.show({ message: t("Link copied") });
   };
 
@@ -154,12 +218,29 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
   };
 
   const handleDeletePage = () => {
-    openDeleteModal({
-      onConfirm: () => {
-        tree?.delete(page.id);
-        navigate(`/s/${spaceSlug}`);
-      },
-    });
+    openDeleteModal({ onConfirm: () => handleDelete(page.id) });
+  };
+
+  const yjsSynced = useAtomValue(yjsSyncedAtom);
+  const [presentationContent, setPresentationContent] = useState<Content>(null);
+
+  const handleOpenPresentation = () => {
+    const liveContent =
+      yjsSynced && pageEditor && !pageEditor.isDestroyed
+        ? pageEditor.getJSON()
+        : null;
+    setPresentationContent(liveContent ?? page?.content ?? null);
+    openPresentationModal();
+  };
+
+  const handleToggleFavorite = () => {
+    if (!page?.id) return;
+    const params = { type: "page" as const, pageId: page.id };
+    if (isFavorited) {
+      removeFavoriteMutation.mutate(params);
+    } else {
+      addFavoriteMutation.mutate(params);
+    }
   };
 
   return (
@@ -173,7 +254,12 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="subtle" color="gray" size={32} aria-label="Page menu">
+          <ActionIcon
+            variant="subtle"
+            color="gray"
+            size={32}
+            aria-label={t("Page actions")}
+          >
             <IconDots size={19} />
           </ActionIcon>
         </Menu.Target>
@@ -186,26 +272,87 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             {t("Copy link")}
           </Menu.Item>
 
-          <Menu.Item
-            leftSection={<IconMarkdown size={16} />}
-            onClick={handleCopyAsMarkdown}
-          >
-            {t("Copy as Markdown")}
-          </Menu.Item>
-          <Menu.Divider />
-
-          <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
-            <Group wrap="nowrap">
-              <PageWidthToggle label={t("Full width")} />
-            </Group>
-          </Menu.Item>
+          {!page?.isBase && (
+            <Menu.Item
+              leftSection={<IconMarkdown size={16} />}
+              onClick={handleCopyAsMarkdown}
+            >
+              {t("Copy as Markdown")}
+            </Menu.Item>
+          )}
 
           <Menu.Item
-            leftSection={<IconHistory size={16} />}
-            onClick={openHistoryModal}
+            leftSection={
+              isFavorited ? (
+                <IconStarFilled size={16} color="var(--mantine-color-yellow-5)" />
+              ) : (
+                <IconStar size={16} />
+              )
+            }
+            onClick={handleToggleFavorite}
           >
-            {t("Page history")}
+            {isFavorited ? t("Remove from favorites") : t("Add to favorites")}
           </Menu.Item>
+
+          {watchStatus?.watching ? (
+            <Menu.Item
+              leftSection={<IconEyeOff size={16} />}
+              onClick={() => unwatchPage.mutate(page.id)}
+            >
+              {t("Stop watching")}
+            </Menu.Item>
+          ) : (
+            <Menu.Item
+              leftSection={<IconEye size={16} />}
+              onClick={() => watchPage.mutate(page.id)}
+            >
+              {t("Watch page")}
+            </Menu.Item>
+          )}
+
+          {!page?.isBase && <Menu.Divider />}
+
+          {!page?.isBase && (
+            <Menu.Item leftSection={<IconArrowsHorizontal size={16} />}>
+              <Group wrap="nowrap">
+                <PageWidthToggle label={t("Full width")} />
+              </Group>
+            </Menu.Item>
+          )}
+
+          {!page?.isBase && (
+            <Menu.Item
+              leftSection={<IconHistory size={16} />}
+              onClick={openHistoryModal}
+            >
+              {t("Page history")}
+            </Menu.Item>
+          )}
+
+          {!page?.isBase && (
+            <Menu.Item
+              leftSection={<IconPaperclip size={16} />}
+              onClick={openAttachmentsModal}
+            >
+              {t("Attachments")}
+            </Menu.Item>
+          )}
+
+          {!page?.isBase && (
+            <Menu.Item
+              leftSection={<IconPresentation size={16} />}
+              onClick={handleOpenPresentation}
+            >
+              {t("Presentation mode")}
+            </Menu.Item>
+          )}
+
+          {!readOnly && !page?.isBase && (
+            <PageVerificationMenuItem
+              pageId={page?.id}
+              onClick={openVerificationModal}
+            />
+          )}
 
           <Menu.Divider />
 
@@ -296,6 +443,27 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         onClose={closeMoveSpaceModal}
         open={movePageModalOpened}
       />
+
+      <PageVerificationModal
+        pageId={page.id}
+        opened={verificationOpened}
+        onClose={closeVerificationModal}
+      />
+
+      <PageAttachmentsModal
+        pageId={page.id}
+        readOnly={readOnly}
+        open={attachmentsOpened}
+        onClose={closeAttachmentsModal}
+      />
+
+      <PresentationModal
+        pageId={page.id}
+        title={page.title}
+        content={presentationContent}
+        opened={presentationOpened}
+        onClose={closePresentationModal}
+      />
     </>
   );
 }
@@ -341,9 +509,15 @@ function ConnectionWarning() {
       openDelay={250}
       withArrow
     >
-      <ActionIcon variant="default" c="red" style={{ border: "none" }}>
+      <ThemeIcon
+        variant="default"
+        c="red"
+        role="status"
+        aria-label={t("Real-time editor connection lost. Retrying...")}
+        style={{ border: "none" }}
+      >
         <IconWifiOff size={20} stroke={2} />
-      </ActionIcon>
+      </ThemeIcon>
     </Tooltip>
   );
 }

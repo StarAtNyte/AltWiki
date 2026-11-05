@@ -1,6 +1,5 @@
-import { Table, Group, Text, Anchor } from "@mantine/core";
+import { Table, Group, Text, Anchor, VisuallyHidden } from "@mantine/core";
 import { useGetGroupsQuery } from "@/features/group/queries/group-query";
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { IconGroupCircle } from "@/components/icons/icon-people-circle.tsx";
 import { useTranslation } from "react-i18next";
@@ -8,36 +7,45 @@ import { formatMemberCount } from "@/lib";
 import { IGroup } from "@/features/group/types/group.types.ts";
 import Paginate from "@/components/common/paginate.tsx";
 import { queryClient } from "@/main.tsx";
-import { getSpaces } from "@/features/space/services/space-service.ts";
 import { getGroupMembers } from "@/features/group/services/group-service.ts";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
+import { SearchInput } from "@/components/common/search-input.tsx";
+import NoTableResults from "@/components/common/no-table-results.tsx";
+import { usePaginateAndSearch } from "@/hooks/use-paginate-and-search.tsx";
+import rowClasses from "@/components/ui/clickable-table-row.module.css";
+import GroupActionMenu from "@/features/group/components/group-action-menu.tsx";
 
 export default function GroupList() {
   const { t } = useTranslation();
-  const [page, setPage] = useState(1);
-  const { data, isLoading } = useGetGroupsQuery({ page });
+  const { search, cursor, goNext, goPrev, handleSearch } = usePaginateAndSearch();
+  const { data, isLoading } = useGetGroupsQuery({ cursor, query: search });
 
   const prefetchGroupMembers = (groupId: string) => {
     queryClient.prefetchQuery({
-      queryKey: ["groupMembers", groupId, { page: 1 }],
-      queryFn: () => getGroupMembers(groupId, { page: 1 }),
+      queryKey: ["groupMembers", groupId, {}],
+      queryFn: () => getGroupMembers(groupId, {}),
     });
   };
 
   return (
     <>
+      <SearchInput onSearch={handleSearch} />
       <Table.ScrollContainer minWidth={500}>
         <Table highlightOnHover verticalSpacing="sm" layout="fixed">
           <Table.Thead>
             <Table.Tr>
               <Table.Th>{t("Group")}</Table.Th>
               <Table.Th>{t("Members")}</Table.Th>
+              <Table.Th w={60}>
+                <VisuallyHidden>{t("Actions")}</VisuallyHidden>
+              </Table.Th>
             </Table.Tr>
           </Table.Thead>
 
           <Table.Tbody>
-            {data?.items.map((group: IGroup, index: number) => (
-              <Table.Tr key={index}>
+            {data?.items.length > 0 ? (
+            data?.items.map((group: IGroup, index: number) => (
+              <Table.Tr key={index} className={rowClasses.row}>
                 <Table.Td onMouseEnter={() => prefetchGroupMembers(group.id)}>
                   <Anchor
                     size="sm"
@@ -46,6 +54,7 @@ export default function GroupList() {
                       cursor: "pointer",
                       color: "var(--mantine-color-text)",
                     }}
+                    className={rowClasses.link}
                     component={Link}
                     to={`/settings/groups/${group.id}`}
                   >
@@ -77,18 +86,24 @@ export default function GroupList() {
                     {formatMemberCount(group.memberCount, t)}
                   </Anchor>
                 </Table.Td>
+                <Table.Td>
+                  <GroupActionMenu group={group} />
+                </Table.Td>
               </Table.Tr>
-            ))}
+            ))
+            ) : (
+              <NoTableResults colSpan={3} />
+            )}
           </Table.Tbody>
         </Table>
       </Table.ScrollContainer>
 
       {data?.items.length > 0 && (
         <Paginate
-          currentPage={page}
-          hasPrevPage={data?.meta.hasPrevPage}
-          hasNextPage={data?.meta.hasNextPage}
-          onPageChange={setPage}
+          hasPrevPage={data?.meta?.hasPrevPage}
+          hasNextPage={data?.meta?.hasNextPage}
+          onNext={() => goNext(data?.meta?.nextCursor)}
+          onPrev={goPrev}
         />
       )}
     </>

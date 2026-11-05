@@ -4,7 +4,7 @@ import { IconPlus, IconSelector } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
-import { useGetSpacesQuery } from "@/features/space/queries/space-query.ts";
+import { useAllSpacesQuery } from "@/features/space/queries/space-query.ts";
 import {
   useCreatePageMutation,
   useRecentChangesQuery,
@@ -19,19 +19,19 @@ export default function QuickCreateTile() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   // Same key as the rail (space-rail.tsx): one shared request.
-  const { data, isLoading } = useGetSpacesQuery({ page: 1, limit: 100 });
+  const { data, isLoading } = useAllSpacesQuery();
   const { data: recent } = useRecentChangesQuery();
   const createPage = useCreatePageMutation();
   const [picked, setPicked] = useState<string | null>(null);
 
   const spaces = useMemo(() => {
-    const { active } = partitionArchivedSpaces<ISpace>(data?.items);
+    const { active } = partitionArchivedSpaces<ISpace>(data);
     return active.filter((s) => s.isMember !== false);
   }, [data]);
 
   // Default to the space of the most recent edit, else the first space.
   const fallbackId = useMemo(() => {
-    const recentSpaceId = recent?.items?.[0]?.spaceId;
+    const recentSpaceId = recent?.pages?.[0]?.items?.[0]?.spaceId;
     if (recentSpaceId && spaces.some((s) => s.id === recentSpaceId)) {
       return recentSpaceId;
     }
@@ -72,7 +72,7 @@ export default function QuickCreateTile() {
             placeholder={t("Choose a space")}
             data={spaces.map((s) => ({ value: s.id, label: s.name }))}
             value={spaceId}
-            onChange={setPicked}
+            onChange={(value) => setPicked(value as string | null)}
             searchable
             allowDeselect={false}
             nothingFoundMessage={t("No spaces found")}

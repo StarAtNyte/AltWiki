@@ -13,14 +13,23 @@ import { Readable } from 'stream';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { getMimeType } from '../../../common/helpers';
 import { Upload } from '@aws-sdk/lib-storage';
+import { Logger } from '@nestjs/common';
+
+const S3_MAX_SOCKETS = parseInt(process.env.AWS_S3_MAX_SOCKETS) || 200;
 
 export class S3Driver implements StorageDriver {
   private readonly s3Client: S3Client;
   private readonly config: S3StorageConfig;
 
   constructor(config: S3StorageConfig) {
-    this.config = config;
-    this.s3Client = new S3Client(config as any);
+    this.config = {
+      ...config,
+      requestHandler: {
+        httpAgent: { maxSockets: S3_MAX_SOCKETS },
+        httpsAgent: { maxSockets: S3_MAX_SOCKETS },
+      },
+    };
+    this.s3Client = new S3Client(this.config as any);
   }
 
   async upload(filePath: string, file: Buffer | Readable): Promise<void> {
@@ -39,6 +48,7 @@ export class S3Driver implements StorageDriver {
 
       await upload.done();
     } catch (err) {
+      Logger.error(err);
       throw new Error(`Failed to upload file: ${(err as Error).message}`);
     }
   }
@@ -73,6 +83,7 @@ export class S3Driver implements StorageDriver {
 
       await upload.done();
     } catch (err) {
+      Logger.error(err);
       throw new Error(`Failed to upload file: ${(err as Error).message}`);
     } finally {
       if (shouldDestroyClient && clientToUse) {
@@ -117,6 +128,25 @@ export class S3Driver implements StorageDriver {
       const command = new GetObjectCommand({
         Bucket: this.config.bucket,
         Key: filePath,
+      });
+
+      const response = await this.s3Client.send(command);
+
+      return response.Body as Readable;
+    } catch (err) {
+      throw new Error(`Failed to read file from S3: ${(err as Error).message}`);
+    }
+  }
+
+  async readRangeStream(
+    filePath: string,
+    range: { start: number; end: number },
+  ): Promise<Readable> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: filePath,
+        Range: `bytes=${range.start}-${range.end}`,
       });
 
       const response = await this.s3Client.send(command);

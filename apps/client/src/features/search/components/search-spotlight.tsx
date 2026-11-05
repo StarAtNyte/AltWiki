@@ -1,7 +1,7 @@
 import { Spotlight } from "@mantine/spotlight";
 import { IconSearch, IconSparkles } from "@tabler/icons-react";
-import { Group, Button } from "@mantine/core";
-import React, { lazy, Suspense, useState, useMemo, useEffect } from "react";
+import { Group, Button, VisuallyHidden, Text } from "@mantine/core";
+import React, { lazy, Suspense, useState, useMemo, useEffect, useCallback } from "react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
@@ -16,8 +16,12 @@ const AiSearchResult = lazy(() =>
     default: m.AiSearchResult,
   })),
 );
-import { useLicense } from "@/ee/hooks/use-license.tsx";
-import { isCloud } from "@/lib/config.ts";
+import { useHasFeature } from "@/ee/hooks/use-feature";
+import { Feature } from "@/ee/features";
+import { useAtomValue } from "jotai";
+import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
+import { hintVectorCache } from "@/ee/ai/services/ai-search-service.ts";
+import { getAiVectorDriver } from "@/lib/config.ts";
 import {
   spotlightClassNames,
   spotlightClasses as classes,
@@ -27,13 +31,18 @@ interface SearchSpotlightProps {
   spaceId?: string;
 }
 export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
+  const workspace = useAtomValue(workspaceAtom);
   const { t } = useTranslation();
-  const { hasLicenseKey } = useLicense();
+  const hasAiFeature = useHasFeature(Feature.AI);
+  const hasAttachmentIndexing = useHasFeature(Feature.ATTACHMENT_INDEXING);
   const [query, setQuery] = useState("");
   const [debouncedSearchQuery] = useDebouncedValue(query, 300);
   const [filters, setFilters] = useState<{
     spaceId?: string | null;
     contentType?: string;
+    creatorId?: string | null;
+    labelIds?: string[];
+    titleOnly?: boolean;
   }>({
     contentType: "page",
   });
@@ -51,10 +60,25 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
       params.spaceId = filters.spaceId;
     }
 
+    if (filters.creatorId) {
+      params.creatorId = filters.creatorId;
+    }
+
+    if (filters.labelIds?.length) {
+      params.labelIds = filters.labelIds;
+    }
+
+    if (filters.titleOnly) {
+      params.titleOnly = true;
+    }
+
     return params;
   }, [debouncedSearchQuery, filters]);
 
-  const { data: searchResults, isLoading } = useUnifiedSearch(
+  const {
+    data: searchResults,
+    isFetching,
+  } = useUnifiedSearch(
     searchParams,
     !isAiMode // Disable regular search when in AI mode
   );
@@ -91,9 +115,14 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     }
   }, [aiSearchError, t]);
 
+  const isFilterBrowse =
+    (filters.labelIds?.length ?? 0) > 0 || !!filters.creatorId;
+  // while the debounce is pending the empty list is not a settled "no results"
+  const isQuerySettled = query === debouncedSearchQuery;
+
   // Determine result type for rendering
   const isAttachmentSearch =
-    filters.contentType === "attachment" && (hasLicenseKey || isCloud());
+    filters.contentType === "attachment" && hasAttachmentIndexing;
 
   const resultItems = (searchResults || []).map((result) => (
     <SearchResultItem
@@ -104,9 +133,18 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
     />
   ));
 
-  const handleFiltersChange = (newFilters: any) => {
-    setFilters(newFilters);
+  const handleSpotlightOpen = () => {
+    if (
+      workspace?.settings?.ai?.search === true &&
+      getAiVectorDriver() === "turbopuffer"
+    ) {
+      hintVectorCache();
+    }
   };
+
+  const handleFiltersChange = useCallback((newFilters: any) => {
+    setFilters(newFilters);
+  }, [setFilters]);
 
   const handleAskClick = () => {
     setIsAiMode(!isAiMode);
@@ -123,6 +161,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
       <Spotlight.Root
         size="xl"
         maxHeight={600}
+        onSpotlightOpen={handleSpotlightOpen}
         store={searchSpotlightStore}
         query={query}
         onQueryChange={setQuery}
@@ -134,6 +173,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
         <Group gap="xs" className={classes.header}>
           <Spotlight.Search
             placeholder={isAiMode ? t("Ask a question...") : t("Search...")}
+            aria-label={isAiMode ? t("Ask a question...") : t("Search")}
             leftSection={<IconSearch size={18} stroke={1.5} />}
             leftSectionWidth={44}
             style={{ flex: 1 }}
@@ -144,7 +184,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
               }
             }}
           />
-          {isAiMode && hasLicenseKey && (
+          {isAiMode && hasAiFeature && (
             <Button
               size="xs"
               leftSection={<IconSparkles size={16} />}
@@ -165,6 +205,18 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
             isAiMode={isAiMode}
           />
         </div>
+
+        <VisuallyHidden role="status" aria-live="polite">
+          {isAiMode
+            ? query.length > 0 && !isAiLoading && !aiSearchResult
+              ? t("No answer available")
+              : ""
+            : (query.length > 0 || isFilterBrowse) && !isFetching
+              ? resultItems.length === 0
+                ? t("No results found")
+                : t("{{count}} results found", { count: resultItems.length })
+              : ""}
+        </VisuallyHidden>
 
         <Spotlight.ActionsList>
           {isAiMode ? (
@@ -188,13 +240,16 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
             </>
           ) : (
             <>
-              {query.length === 0 && resultItems.length === 0 && (
+              {query.length === 0 && !isFilterBrowse && resultItems.length === 0 && (
                 <Spotlight.Empty>{t("Start typing to search...")}</Spotlight.Empty>
               )}
 
-              {query.length > 0 && !isLoading && resultItems.length === 0 && (
-                <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
-              )}
+              {(query.length > 0 || isFilterBrowse) &&
+                !isFetching &&
+                isQuerySettled &&
+                resultItems.length === 0 && (
+                  <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
+                )}
 
               {resultItems.length > 0 && (
                 <Spotlight.ActionsGroup
@@ -202,6 +257,16 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
                 >
                   {resultItems}
                 </Spotlight.ActionsGroup>
+              )}
+
+              {(query.length > 0 || isFilterBrowse) &&
+                isFetching &&
+                resultItems.length === 0 && (
+                <Spotlight.Empty>
+                  <Text size="sm" style={{ marginTop: 10 }}>
+                    {t("Searching...")}
+                  </Text>
+                </Spotlight.Empty>
               )}
             </>
           )}

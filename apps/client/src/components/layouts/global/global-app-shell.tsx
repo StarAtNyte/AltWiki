@@ -1,6 +1,7 @@
 import { AppShell, Container } from "@mantine/core";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import SettingsSidebar from "@/components/settings/settings-sidebar.tsx";
 import { useAtom } from "jotai";
 import {
@@ -10,16 +11,23 @@ import {
   sidebarWidthAtom,
 } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { SpaceSidebar } from "@/features/space/components/sidebar/space-sidebar.tsx";
+import { lazyWithPrefetch } from "@/lib/lazy-prefetch.ts";
+
+const AiChatSidebar = lazyWithPrefetch(
+  () => import("@/ee/ai-chat/components/ai-chat-sidebar.tsx"),
+);
 import { AppHeader } from "@/components/layouts/global/app-header.tsx";
 import classes from "./app-shell.module.css";
 import { useTrialEndAction } from "@/ee/hooks/use-trial-end-action.tsx";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
+import { ASIDE_PANEL_ID } from "@/hooks/use-toggle-aside.tsx";
+import { MAIN_CONTENT_ID, SkipToMain } from "@/components/ui/skip-to-main.tsx";
 import { SpaceRail } from "@/components/layouts/global/space-rail.tsx";
 import { AppBackdrop } from "@/features/background/components/app-backdrop.tsx";
 import { BackgroundPickerModal } from "@/features/background/components/background-picker.tsx";
 
-// Comments / table of contents / page info: only used on page routes, so
-// loaded with the page instead of with the shell.
+// Comments / table of contents / page info / AI chat: only used on page
+// routes, so loaded with the page instead of with the shell.
 const Aside = React.lazy(() => import("@/components/layouts/global/aside.tsx"));
 
 // The floating rail (72px) plus its 12px insets. Keep in sync with
@@ -33,11 +41,12 @@ export default function GlobalAppShell({
 }: {
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   useTrialEndAction();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
   const toggleMobile = useToggleSidebar(mobileSidebarAtom);
   const [desktopOpened] = useAtom(desktopSidebarAtom);
-  const [{ isAsideOpen }] = useAtom(asideStateAtom);
+  const [{ isAsideOpen, tab: asideTab }] = useAtom(asideStateAtom);
   const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef(null);
@@ -111,11 +120,15 @@ export default function GlobalAppShell({
   const location = useLocation();
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isSpaceRoute = location.pathname.startsWith("/s/");
-  const isHomeRoute = location.pathname.startsWith("/home");
-  const isSpacesRoute = location.pathname === "/spaces";
+  const isAiRoute = location.pathname.startsWith("/ai");
   const isPageRoute = location.pathname.includes("/p/");
   const isTrashRoute = /^\/s\/[^/]+\/trash/.test(location.pathname);
-  const hideSidebar = isHomeRoute || isSpacesRoute;
+  // Space, settings and AI chat routes have a contextual sidebar next to the
+  // rail; every other route (home, spaces, favorites, labels, templates) is
+  // rail only.
+  const hideSidebar = !isSpaceRoute && !isSettingsRoute && !isAiRoute;
+  const isFullBleedRoute =
+    location.pathname.startsWith("/home") || location.pathname === "/spaces";
   // Reading/working views sit on a solid surface; the photo only shows around
   // it (and through the glass rail / sidebar).
   const solidCanvas = isPageRoute || isSettingsRoute || isTrashRoute;
@@ -133,6 +146,7 @@ export default function GlobalAppShell({
 
   return (
     <>
+    <SkipToMain />
     <AppBackdrop />
     {solidCanvas && <div className={classes.docCanvas} aria-hidden />}
     <AppShell
@@ -158,7 +172,7 @@ export default function GlobalAppShell({
           collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
         }
       }
-      padding={isHomeRoute || isSpacesRoute ? 0 : "md"}
+      padding={isFullBleedRoute ? 0 : "md"}
     >
       <AppShell.Header
         ref={headerRef}
@@ -173,6 +187,15 @@ export default function GlobalAppShell({
         ref={sidebarRef}
         data-resizing={isResizing || undefined}
         data-rail-only={hideSidebar || undefined}
+        aria-label={
+          isSpaceRoute
+            ? t("Space navigation")
+            : isSettingsRoute
+              ? t("Settings navigation")
+              : isAiRoute
+                ? t("AI navigation")
+                : t("Main navigation")
+        }
       >
         <SpaceRail />
         <div
@@ -185,11 +208,16 @@ export default function GlobalAppShell({
           )}
           {isSpaceRoute && <SpaceSidebar />}
           {isSettingsRoute && <SettingsSidebar />}
+          {isAiRoute && (
+            <React.Suspense fallback={null}>
+              <AiChatSidebar />
+            </React.Suspense>
+          )}
         </div>
       </AppShell.Navbar>
-      <AppShell.Main>
+      <AppShell.Main id={MAIN_CONTENT_ID} tabIndex={-1}>
         {isSettingsRoute ? (
-          <Container size={850} pt="lg">
+          <Container size={900} pt="lg" pb={80}>
             {children}
           </Container>
         ) : (
@@ -198,7 +226,23 @@ export default function GlobalAppShell({
       </AppShell.Main>
 
       {isPageRoute && (
-        <AppShell.Aside className={classes.aside} withBorder={false}>
+        <AppShell.Aside
+          id={ASIDE_PANEL_ID}
+          tabIndex={-1}
+          className={classes.aside}
+          withBorder={false}
+          aria-label={
+            asideTab === "comments"
+              ? t("Comments")
+              : asideTab === "toc"
+                ? t("Table of contents")
+                : asideTab === "chat"
+                  ? t("AI Chat")
+                  : asideTab === "details"
+                    ? t("Details")
+                    : undefined
+          }
+        >
           <div className={classes.asideInner}>
             <React.Suspense fallback={null}>
               <Aside />

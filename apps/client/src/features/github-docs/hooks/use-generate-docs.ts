@@ -10,7 +10,7 @@ import { notifications } from "@mantine/notifications";
 import { useAtom } from "jotai";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { SpaceTreeNode } from "@/features/page/tree/types";
-import { SimpleTree } from "react-arborist";
+import { treeModel } from "@/features/page/tree/model/tree-model";
 import { useQueryEmit } from "@/features/websocket/use-query-emit";
 
 export function useGenerateDocs() {
@@ -42,7 +42,7 @@ export function useGenerateDocs() {
     (pages: GenerationProgress["pages"]) => {
       if (!pages || pages.length === 0) return;
 
-      const treeApi = new SimpleTree<SpaceTreeNode>(treeData);
+      let nextTree: SpaceTreeNode[] = treeData;
 
       pages.forEach((page, idx) => {
         // Create the tree node data
@@ -63,23 +63,19 @@ export function useGenerateDocs() {
         let index = 0;
 
         if (parentId) {
-          const parentNode = treeApi.find(parentId);
+          const parentNode = treeModel.find(nextTree, parentId);
           if (parentNode) {
             index = parentNode.children?.length || 0;
           }
         } else {
           // Root level page - add at the end
-          index = treeApi.data.length;
+          index = nextTree.length;
         }
 
         // Check if node already exists in tree
-        if (!treeApi.find(page.id)) {
+        if (!treeModel.find(nextTree, page.id)) {
           // Add the node to the tree
-          treeApi.create({
-            parentId,
-            index,
-            data: nodeData,
-          });
+          nextTree = treeModel.insert(nextTree, parentId, nodeData, index);
 
           // Emit websocket event to sync with other users
           setTimeout(() => {
@@ -97,7 +93,7 @@ export function useGenerateDocs() {
       });
 
       // Update the tree data
-      setTreeData(treeApi.data);
+      setTreeData(nextTree);
     },
     [treeData, setTreeData, emit]
   );
