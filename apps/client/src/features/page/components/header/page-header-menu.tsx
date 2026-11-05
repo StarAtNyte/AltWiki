@@ -17,6 +17,7 @@ import {
   IconStar,
   IconStarFilled,
   IconTrash,
+  IconUserCog,
   IconWifiOff,
 } from "@tabler/icons-react";
 import { useEffect, useRef, useState } from "react";
@@ -46,6 +47,8 @@ import {
 import { formattedDate } from "@/lib/time.ts";
 import { PageEditModeToggle } from "@/features/user/components/page-state-pref.tsx";
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
+import ChangeOwnerModal from "@/features/page/components/change-owner-modal.tsx";
+import { useCanChangePageOwner } from "@/features/page/hooks/use-can-change-page-owner.ts";
 import PageAttachmentsModal from "@/features/attachments/components/page-attachments-modal.tsx";
 import PresentationModal from "@/features/editor/components/presentation/presentation-modal.tsx";
 import { useTimeAgo } from "@/hooks/use-time-ago.tsx";
@@ -180,6 +183,11 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
     presentationOpened,
     { open: openPresentationModal, close: closePresentationModal },
   ] = useDisclosure(false);
+  const [
+    changeOwnerOpened,
+    { open: openChangeOwnerModal, close: closeChangeOwnerModal },
+  ] = useDisclosure(false);
+  const canChangeOwner = useCanChangePageOwner(page?.spaceId);
   const [pageEditor] = useAtom(pageEditorAtom);
   const pageUpdatedAt = useTimeAgo(page?.updatedAt);
   const favoriteIds = useFavoriteIds("page", page?.spaceId);
@@ -365,6 +373,15 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
             </Menu.Item>
           )}
 
+          {canChangeOwner && (
+            <Menu.Item
+              leftSection={<IconUserCog size={16} />}
+              onClick={openChangeOwnerModal}
+            >
+              {t("Change owner")}
+            </Menu.Item>
+          )}
+
           <Menu.Item
             leftSection={<IconFileExport size={16} />}
             onClick={openExportModal}
@@ -442,6 +459,12 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         currentSpaceSlug={spaceSlug}
         onClose={closeMoveSpaceModal}
         open={movePageModalOpened}
+      />
+
+      <ChangeOwnerModal
+        pageId={page.id}
+        opened={changeOwnerOpened}
+        onClose={closeChangeOwnerModal}
       />
 
       <PageVerificationModal

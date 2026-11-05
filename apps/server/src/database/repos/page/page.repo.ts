@@ -161,6 +161,32 @@ export class PageRepo {
     return result;
   }
 
+  /**
+   * AltWiki: reassign page ownership (creator_id) without bumping updated_at,
+   * so "recently updated" ordering is not affected by an ownership change.
+   */
+  async updateCreator(
+    pageIds: string[],
+    creatorId: string,
+    workspaceId: string,
+    trx?: KyselyTransaction,
+  ): Promise<number> {
+    if (pageIds.length === 0) return 0;
+    const result = await dbOrTx(this.db, trx)
+      .updateTable('pages')
+      .set({ creatorId })
+      .where('id', 'in', pageIds)
+      .where('workspaceId', '=', workspaceId)
+      .executeTakeFirst();
+
+    this.eventEmitter.emit(EventName.PAGE_UPDATED, {
+      pageIds,
+      workspaceId,
+    });
+
+    return Number(result.numUpdatedRows ?? 0);
+  }
+
   async lockPageHierarchySpaces(
     spaceIds: string[],
     trx: KyselyTransaction,

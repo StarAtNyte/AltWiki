@@ -14,11 +14,14 @@ import {
   IconStar,
   IconStarFilled,
   IconTrash,
+  IconUserCog,
 } from "@tabler/icons-react";
 
 import ExportModal from "@/components/common/export-modal";
 import MovePageModal from "@/features/page/components/move-page-modal.tsx";
 import CopyPageModal from "@/features/page/components/copy-page-modal.tsx";
+import ChangeOwnerModal from "@/features/page/components/change-owner-modal.tsx";
+import { useCanChangePageOwner } from "@/features/page/hooks/use-can-change-page-owner.ts";
 import { useDeletePageModal } from "@/features/page/hooks/use-delete-page-modal.tsx";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { getPageTitle } from "@/features/page/page.utils";
@@ -69,6 +72,11 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
     copyPageModalOpened,
     { open: openCopyPageModal, close: closeCopySpaceModal },
   ] = useDisclosure(false);
+  const [
+    changeOwnerOpened,
+    { open: openChangeOwnerModal, close: closeChangeOwnerModal },
+  ] = useDisclosure(false);
+  const canChangeOwner = useCanChangePageOwner(node.spaceId);
   const favoriteIds = useFavoriteIds("page", node.spaceId);
   const addFavorite = useAddFavoriteMutation();
   const removeFavorite = useRemoveFavoriteMutation();
@@ -196,6 +204,19 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
             {t("Export page")}
           </Menu.Item>
 
+          {canChangeOwner && (
+            <Menu.Item
+              leftSection={<IconUserCog size={16} />}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openChangeOwnerModal();
+              }}
+            >
+              {t("Change owner")}
+            </Menu.Item>
+          )}
+
           {canEdit && (
             <>
               <Menu.Item
@@ -274,6 +295,12 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
         currentSpaceSlug={spaceSlug}
         onClose={closeCopySpaceModal}
         open={copyPageModalOpened}
+      />
+
+      <ChangeOwnerModal
+        pageId={node.id}
+        opened={changeOwnerOpened}
+        onClose={closeChangeOwnerModal}
       />
 
       <ExportModal

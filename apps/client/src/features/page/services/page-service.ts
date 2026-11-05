@@ -273,3 +273,28 @@ export async function bulkDuplicatePages(
   return req.data;
 }
 
+
+// AltWiki: reassign the page owner (creator). Admin / space-admin only.
+export interface IChangePageOwner {
+  pageId: string;
+  userId: string;
+  includeSubpages?: boolean;
+}
+
+export interface IChangePageOwnerResult {
+  pageId: string;
+  slugId: string;
+  updatedCount: number;
+  creator: { id: string; name: string; avatarUrl: string | null };
+  warning?: string;
+}
+
+export async function changePageOwner(
+  data: IChangePageOwner,
+): Promise<IChangePageOwnerResult> {
+  const req = await api.post<IChangePageOwnerResult>(
+    "/pages/change-owner",
+    data,
+  );
+  return req.data;
+}
