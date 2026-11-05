@@ -16,6 +16,9 @@ export type IntegrationDefinition = {
   capabilities: IntegrationCapability[];
   oauth?: OAuthConfig;
   requiresFeature?: string;
+  /** AltWiki: false when the OAuth app env vars are not set on the server. */
+  configured?: boolean;
+  missingEnv?: string[];
 };
 
 export type Integration = {

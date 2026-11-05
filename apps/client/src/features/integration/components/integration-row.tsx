@@ -41,6 +41,7 @@ export default function IntegrationRow({
   const isInstalled = !!installation;
   const hasAccess = useHasFeature(definition.requiresFeature ?? "");
   const locked = !!definition.requiresFeature && !hasAccess;
+  const notConfigured = definition.configured === false;
   const upgradeLabel = useUpgradeLabel();
   const minimumPlan = MINIMUM_PLAN[definition.requiresFeature ?? ""];
 
@@ -84,14 +85,25 @@ export default function IntegrationRow({
               {t("Uninstall")}
             </Button>
           ) : (
-            <Tooltip label={upgradeLabel} disabled={!locked}>
+            <Tooltip
+              multiline
+              w={280}
+              label={
+                notConfigured
+                  ? t("Not configured on this server. Set {{vars}} and restart.", {
+                      vars: definition.missingEnv?.join(", "),
+                    })
+                  : upgradeLabel
+              }
+              disabled={!locked && !notConfigured}
+            >
               <Button
                 size="xs"
                 variant="light"
-                disabled={locked}
+                disabled={locked || notConfigured}
                 onClick={() => onInstall(definition.type)}
               >
-                {t("Install")}
+                {notConfigured ? t("Not configured") : t("Install")}
               </Button>
             </Tooltip>
           )}

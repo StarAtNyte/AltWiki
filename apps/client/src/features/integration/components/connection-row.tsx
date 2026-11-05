@@ -79,6 +79,14 @@ export default function ConnectionRow({
             <Button
               size="xs"
               variant="light"
+              disabled={definition.configured === false}
+              title={
+                definition.configured === false
+                  ? t("Not configured on this server. Set {{vars}} and restart.", {
+                      vars: definition.missingEnv?.join(", "),
+                    })
+                  : undefined
+              }
               onClick={() => onConnect(definition.type)}
             >
               {t("Connect")}

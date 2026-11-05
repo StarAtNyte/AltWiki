@@ -1736,5 +1736,7 @@
   "Invalid or expired password reset link": "Invalid or expired password reset link",
   "Goto login page": "Goto login page",
   "Page not found": "Page not found",
-  "All spaces in your workspace": "All spaces in your workspace"
+  "All spaces in your workspace": "All spaces in your workspace",
+  "Not configured": "Not configured",
+  "Not configured on this server. Set {{vars}} and restart.": "Not configured on this server. Set {{vars}} and restart."
 }

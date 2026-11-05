@@ -1,3 +1,4 @@
+import { credentialEnvKey } from '../oauth/credential-env';
 import { Injectable } from '@nestjs/common';
 import {
   IntegrationDefinition,
@@ -32,10 +33,26 @@ export class IntegrationRegistry {
     return Array.from(this.providers.values());
   }
 
-  getAvailableIntegrations(): IntegrationDefinition[] {
+  getAvailableIntegrations(): (IntegrationDefinition & {
+    configured: boolean;
+    missingEnv: string[];
+  })[] {
     return this.getAllProviders()
       .map((p) => p.definition)
-      .filter((definition) => !definition.hidden);
+      .filter((definition) => !definition.hidden)
+      .map((definition) => {
+        // AltWiki: OAuth providers need an app registered at the provider.
+        // Report which env vars are missing so the UI can disable Install
+        // instead of failing with "Missing environment variable".
+        const missingEnv = definition.oauth
+          ? (['CLIENT_ID', 'CLIENT_SECRET'] as const)
+              .map((field) =>
+                credentialEnvKey(field, definition.type, definition.oauth),
+              )
+              .filter((key) => !process.env[key])
+          : [];
+        return { ...definition, configured: missingEnv.length === 0, missingEnv };
+      });
   }
 
   findUnfurlProvider(
