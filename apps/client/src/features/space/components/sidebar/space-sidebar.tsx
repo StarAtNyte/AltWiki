@@ -582,6 +582,7 @@ function PagesMenu({ onSelectPages }: { onSelectPages: () => void }) {
         </Menu.Item>
         <Menu.Divider />
         <Menu.Label>{t("Sort pages")}</Menu.Label>
+        {sortItem("manual", "Manual (drag to reorder)")}
         {sortItem("alphabetical-asc", "A to Z")}
         {sortItem("alphabetical-desc", "Z to A")}
         {sortItem("created-newest", "Date created (newest)")}
