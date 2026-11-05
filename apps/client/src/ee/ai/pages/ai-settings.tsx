@@ -8,6 +8,7 @@ import EnableAiChat from "@/ee/ai-chat/components/enable-ai-chat.tsx";
 import AiChatReadOnly from "@/ee/ai-chat/components/ai-chat-read-only.tsx";
 import AiChatWorkspaceKnowledgeOnly from "@/ee/ai-chat/components/ai-chat-workspace-knowledge-only.tsx";
 import McpSettings from "@/ee/ai/components/mcp-settings.tsx";
+import GeminiApiKeySettings from "@/ee/ai/components/gemini-api-key-settings.tsx";
 import { Alert, Collapse, Stack, Tabs } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useHasFeature } from "@/ee/hooks/use-feature";
@@ -67,13 +68,14 @@ export default function AiSettings() {
               mb="lg"
             >
               {t(
-                "AI is available in the Docmost paid editions. Contact sales@docmost.com.",
+                "AI is available in the paid editions. Contact support.",
               )}
             </Alert>
           )}
 
           <Stack gap="md">
             {!isCloud() && <EnableAiSearch />}
+            {!isCloud() && <GeminiApiKeySettings />}
             <EnableGenerativeAi />
             <EnableAiChat />
             <Collapse expanded={aiChatEnabled}>

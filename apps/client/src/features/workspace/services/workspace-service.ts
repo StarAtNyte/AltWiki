@@ -54,7 +54,9 @@ export async function activateWorkspaceMember(data: {
   await api.post("/workspace/members/activate", data);
 }
 
-export async function updateWorkspace(data: Partial<IWorkspace>) {
+export async function updateWorkspace(
+  data: Partial<IWorkspace> & { geminiApiKey?: string },
+) {
   const req = await api.post<IWorkspace>("/workspace/update", data);
   return req.data;
 }

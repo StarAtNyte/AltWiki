@@ -1,26 +1,176 @@
-.logo {
-    margin-top: 80px;
+/*
+ * Auth pages in the alpine glass style: a centred glass card over the
+ * background photo. The rules below skin the Mantine inputs / buttons inside
+ * the card so the individual forms stay unchanged.
+ */
 
-    @media (max-width: $mantine-breakpoint-sm) {
-        margin-top: 30px;
-    }
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
 }
 
-.container {
-    box-shadow: rgba(0, 0, 0, 0.07) 0px 2px 45px 4px;
-    border-radius: 4px;
-    background: light-dark(var(--mantine-color-body), rgba(0, 0, 0, 0.1));
-    margin-top: 40px;
-    margin-bottom: 20px;
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: rem(48px) rem(16px);
 
-    @media (max-width: $mantine-breakpoint-sm) {
-        margin-top: 20px;
-        margin-bottom: 20px;
+  @media (max-width: $mantine-breakpoint-sm) {
+    justify-content: flex-start;
+    padding-top: rem(32px);
+  }
+}
+
+.footer {
+  margin-top: rem(20px);
+  text-align: center;
+  font-size: rem(12px);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--app-text-2);
+}
+
+/* ---------- card ---------- */
+
+.container {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: rem(18px);
+  background: var(--app-glass-strong-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border);
+  box-shadow:
+    var(--app-glass-shadow),
+    0 24px 48px light-dark(rgba(15, 23, 42, 0.08), rgba(0, 0, 0, 0.3));
+
+  /* Heading: serif, like the home greeting. */
+  :global(.mantine-Title-root) {
+    font-family: var(--app-font-serif);
+    font-weight: 500;
+    font-size: rem(28px);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    color: var(--app-ink);
+  }
+
+  :global(.mantine-InputWrapper-label) {
+    margin-bottom: rem(6px);
+    font-size: rem(13px);
+    font-weight: 500;
+    color: var(--app-text-2);
+  }
+
+  /* Inputs: same shape as the header search pill, 44px, 10px radius. */
+  :global(.mantine-Input-input) {
+    height: rem(44px);
+    min-height: rem(44px);
+    border-radius: rem(10px);
+    font-family: var(--mantine-font-family);
+    font-size: rem(14px);
+    color: var(--app-ink);
+    background: var(--app-doc-bg);
+    border: 1px solid light-dark(rgba(15, 23, 42, 0.1), rgba(255, 255, 255, 0.1));
+    box-shadow: 0 1px 2px light-dark(rgba(15, 23, 42, 0.04), rgba(0, 0, 0, 0.2));
+    transition:
+      border-color var(--app-transition),
+      box-shadow var(--app-transition);
+
+    &::placeholder {
+      color: var(--app-muted);
     }
+
+    &:focus,
+    &:focus-within {
+      border-color: light-dark(rgba(15, 23, 42, 0.28), rgba(255, 255, 255, 0.28));
+      box-shadow: 0 0 0 3px var(--app-focus-ring);
+    }
+
+    &[data-error] {
+      border-color: var(--mantine-color-error);
+    }
+  }
+
+  /* PasswordInput nests the real <input> inside the styled wrapper. */
+  :global(.mantine-PasswordInput-innerInput) {
+    height: 100%;
+    font-size: rem(14px);
+    color: var(--app-ink);
+  }
+
+  :global(.mantine-Button-root) {
+    height: rem(44px);
+    border-radius: rem(10px);
+    font-weight: 500;
+  }
+
+  /* Primary action: solid ink, full width (set by each form). */
+  :global(.mantine-Button-root[type="submit"]) {
+    background: var(--app-ink);
+    color: var(--app-doc-bg);
+    border: 0;
+
+    &:hover {
+      background: light-dark(#2b3346, #ffffff);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--app-focus-ring);
+      outline-offset: 2px;
+    }
+
+    &[data-loading],
+    &:disabled {
+      background: var(--app-ink);
+      opacity: 0.7;
+    }
+  }
+
+  /* Helper links (forgot password, back to login, ...). */
+  :global(.mantine-Anchor-root) {
+    color: var(--app-muted);
+    font-size: rem(13px);
+
+    &:hover {
+      color: var(--app-text-2);
+    }
+  }
 }
 
 .containerBox {
-    margin-top: 40px;
+  padding: rem(32px) !important;
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    padding: rem(24px) rem(20px) !important;
+  }
 }
 
+/* ---------- brand ---------- */
 
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: rem(10px);
+  margin-bottom: rem(20px);
+  user-select: none;
+
+  img {
+    display: block;
+    width: rem(48px);
+    height: rem(48px);
+    border-radius: rem(12px);
+  }
+}
+
+.wordmark {
+  font-size: rem(17px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--app-ink);
+}

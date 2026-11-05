@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { AuthBrand } from "@/features/auth/components/auth-layout.tsx";
 import { useForm } from "@mantine/form";
 import { zod4Resolver } from "mantine-form-zod-resolver";
 import useAuth from "@/features/auth/hooks/use-auth";
@@ -73,8 +74,9 @@ export function LoginForm() {
     <AuthLayout>
       <Container size={420} className={classes.container}>
         <Box p="xl" className={classes.containerBox}>
+          <AuthBrand />
           <Title order={1} size="h2" ta="center" fw={500} mb="md">
-            {t("Login")}
+            {t("Welcome back")}
           </Title>
 
           <SsoLogin />

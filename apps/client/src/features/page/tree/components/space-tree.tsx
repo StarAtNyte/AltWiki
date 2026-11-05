@@ -1,4 +1,4 @@
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -9,13 +9,17 @@ import {
   usePageQuery,
 } from "@/features/page/queries/page-query.ts";
 import classes from "@/features/page/tree/styles/tree.module.css";
-import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import {
+  sortOrderAtom,
+  treeDataAtom,
+} from "@/features/page/tree/atoms/tree-data-atom.ts";
 import { openTreeNodesAtom } from "@/features/page/tree/atoms/open-tree-nodes-atom.ts";
 import { useTreeMutation } from "@/features/page/tree/hooks/use-tree-mutation.ts";
 import {
   buildTree,
   buildTreeWithChildren,
   mergeRootTrees,
+  sortTreeNodes,
   spaceRoots,
   updateSpaceRoots,
 } from "@/features/page/tree/utils/utils.ts";
@@ -45,6 +49,8 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
     isFetching,
   } = useGetRootSidebarPagesQuery({ spaceId });
   const [openTreeNodes, setOpenTreeNodes] = useAtom(openTreeNodesAtom);
+  // AltWiki: user-selected sidebar sort order (space sidebar menu).
+  const sortOrder = useAtomValue(sortOrderAtom);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const spaceIdRef = useRef(spaceId);
   spaceIdRef.current = spaceId;
@@ -181,8 +187,8 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   );
 
   const filteredData = useMemo(
-    () => spaceRoots(data, spaceId),
-    [data, spaceId],
+    () => sortTreeNodes(spaceRoots(data, spaceId), sortOrder),
+    [data, spaceId, sortOrder],
   );
 
   // Stable callbacks for DocTree. Without these, every parent render recreates
@@ -222,6 +228,8 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           disableDrag={disableDragDrop}
           disableDrop={disableDragDrop}
           getDragLabel={getDragLabel}
+          indentPerLevel={24}
+          rowHeight={30}
           aria-label={t("Pages")}
         />
       )}

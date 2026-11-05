@@ -2,9 +2,31 @@
   img {
     max-width: 100%;
     height: auto;
+    border-radius: var(--mantine-radius-md);
 
     @media print {
       break-inside: avoid;
+    }
+  }
+
+  video,
+  iframe {
+    max-width: 100%;
+    border-radius: var(--mantine-radius-md);
+  }
+
+  /* media sit on their own line with a hairline frame so light screenshots
+     don't bleed into the page */
+  .node-image,
+  .node-video {
+    margin-top: 1.25em;
+    margin-bottom: 1.25em;
+
+    img,
+    video {
+      box-shadow:
+        0 0 0 1px var(--app-border-subtle),
+        var(--mantine-shadow-xs);
     }
   }
 

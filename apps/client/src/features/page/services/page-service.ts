@@ -15,7 +15,11 @@ import { InfiniteData } from "@tanstack/react-query";
 import { IFileTask } from '@/features/file-task/types/file-task.types.ts';
 import { IAttachment } from '@/features/attachments/types/attachment.types.ts';
 
-export async function createPage(data: Partial<IPage>): Promise<IPage> {
+export type CreatePageData = Partial<IPage> & {
+  markdownContent?: string;
+};
+
+export async function createPage(data: CreatePageData): Promise<IPage> {
   const req = await api.post<IPage>("/pages/create", data);
   return req.data;
 }
@@ -71,6 +75,7 @@ export async function getSidebarPages(
 
 export async function getAllSidebarPages(
   params: SidebarPagesParams,
+  fetchAllPages = true,
 ): Promise<InfiniteData<IPagination<IPage>, unknown>> {
   let cursor: string | undefined = undefined;
   const pages: IPagination<IPage>[] = [];
@@ -84,7 +89,7 @@ export async function getAllSidebarPages(
     pageParams.push(cursor);
 
     cursor = data.meta.nextCursor ?? undefined;
-  } while (cursor);
+  } while (cursor && fetchAllPages);
 
   return {
     pageParams,
@@ -213,3 +218,58 @@ export async function uploadFile(
 
   return req as unknown as IAttachment;
 }
+
+// Bulk Operations
+export interface BulkOperationResult {
+  success: number;
+  failed: number;
+}
+
+export interface BulkDuplicateResult extends BulkOperationResult {
+  duplicatedPages: IPage[];
+}
+
+export async function bulkDeletePages(
+  pageIds: string[],
+  permanentlyDelete = false,
+): Promise<BulkOperationResult> {
+  const req = await api.post<BulkOperationResult>("/pages/bulk/delete", {
+    pageIds,
+    permanentlyDelete,
+  });
+  return req.data;
+}
+
+export async function bulkMovePages(
+  pageIds: string[],
+  parentPageId?: string,
+  spaceId?: string,
+): Promise<BulkOperationResult> {
+  const req = await api.post<BulkOperationResult>("/pages/bulk/move", {
+    pageIds,
+    parentPageId,
+    spaceId,
+  });
+  return req.data;
+}
+
+export async function bulkRestorePages(
+  pageIds: string[],
+): Promise<BulkOperationResult> {
+  const req = await api.post<BulkOperationResult>("/pages/bulk/restore", {
+    pageIds,
+  });
+  return req.data;
+}
+
+export async function bulkDuplicatePages(
+  pageIds: string[],
+  spaceId?: string,
+): Promise<BulkDuplicateResult> {
+  const req = await api.post<BulkDuplicateResult>("/pages/bulk/duplicate", {
+    pageIds,
+    spaceId,
+  });
+  return req.data;
+}
+

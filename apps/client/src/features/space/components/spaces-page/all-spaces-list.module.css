@@ -1,16 +1,170 @@
-.spaceLink {
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  width: 100%;
+/* Spaces page: glass search bar, then a glass panel with 4/3/2/1 card grid
+   in the same card style as the home Spaces panel. */
 
-  &:hover {
-    text-decoration: none;
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: rem(16px);
+  padding: rem(12px) rem(16px) rem(12px) rem(12px);
+  margin-bottom: rem(24px);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    margin-bottom: rem(16px);
+  }
+}
+
+.search {
+  flex: 1;
+  max-width: rem(420px);
+}
+
+.searchInput {
+  height: rem(40px);
+  background: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--app-hair);
+  color: var(--app-ink);
+
+  &::placeholder {
+    color: var(--app-muted);
+  }
+
+  &:focus {
+    border-color: var(--app-focus-ring);
+  }
+}
+
+.toolbarMeta {
+  margin-left: auto;
+  font-size: rem(12.5px);
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.panel {
+  padding: rem(20px);
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: rem(12px);
+  margin-bottom: rem(16px);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: rem(12px);
+
+  @media (max-width: $mantine-breakpoint-lg) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: $mantine-breakpoint-md) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: rem(14px);
+  min-width: 0;
+  min-height: rem(148px);
+  padding: rem(16px);
+  border-radius: rem(14px);
+  background: var(--app-tile-bg);
+  box-shadow: 0 0 0 1px var(--app-hair);
+  text-decoration: none;
+  color: var(--app-ink);
+  transition: background-color var(--app-transition);
+
+  @mixin hover {
+    background: var(--app-tile-hover);
+
+    .chevron {
+      color: var(--app-ink);
+    }
   }
 
   &:focus-visible {
-    outline: 2px solid var(--mantine-primary-color-filled);
+    outline: 2px solid var(--app-focus-ring);
     outline-offset: 2px;
-    border-radius: var(--mantine-radius-sm);
+  }
+}
+
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: rem(8px);
+}
+
+.cardActions {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(4px);
+}
+
+.chevron {
+  flex-shrink: 0;
+  color: var(--app-muted);
+  transition: color var(--app-transition);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: rem(2px);
+  min-width: 0;
+}
+
+.title,
+.description {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.title {
+  font-size: rem(14.5px);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.description {
+  font-size: rem(13px);
+  line-height: 1.45;
+  color: var(--app-text-2);
+}
+
+.meta {
+  margin-top: rem(4px);
+  font-size: rem(12.5px);
+  line-height: 1.4;
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  border: 1px dashed var(--app-hair);
+  border-radius: rem(14px);
+  padding: var(--mantine-spacing-xl);
+  text-align: center;
+}
+
+.favorites {
+  margin-bottom: rem(24px);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    margin-bottom: rem(16px);
   }
 }

@@ -1,12 +1,4 @@
-import {
-  ActionIcon,
-  Badge,
-  Box,
-  Group,
-  Text,
-  Tooltip,
-  UnstyledButton,
-} from "@mantine/core";
+import { ActionIcon, Badge, Group, Text, Tooltip } from "@mantine/core";
 import classes from "./app-header.module.css";
 import React from "react";
 import TopMenu from "@/components/layouts/global/top-menu.tsx";
@@ -28,16 +20,9 @@ import {
   SearchControl,
   SearchMobileControl,
 } from "@/features/search/components/search-control.tsx";
-import {
-  searchSpotlight,
-  shareSearchSpotlight,
-} from "@/features/search/constants.ts";
+import { searchSpotlight } from "@/features/search/constants.ts";
 import { NotificationPopover } from "@/features/notification/components/notification-popover.tsx";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
-
-const links = [
-  { link: APP_ROUTE.HOME, label: "Home" },
-];
 
 export function AppHeader() {
   const { t } = useTranslation();
@@ -47,23 +32,37 @@ export function AppHeader() {
   const [desktopOpened] = useAtom(desktopSidebarAtom);
   const toggleDesktop = useToggleSidebar(desktopSidebarAtom);
   const { isTrial, trialDaysLeft } = useTrial();
-  const location = useLocation();
   const toggleAside = useToggleAside();
   const [workspace] = useAtom(workspaceAtom);
   const aiChatEnabled = workspace?.settings?.ai?.chat === true;
 
-  const isPageRoute = location.pathname.includes("/p/");
+  const location = useLocation();
+  const pathname = location.pathname;
+  const isHomeRoute = pathname.startsWith("/home");
+  const isSpacesRoute = pathname === "/spaces";
+  const isPageRoute = pathname.includes("/p/");
+  // Only space, settings and AI chat routes have a contextual sidebar to
+  // collapse (see global-app-shell.tsx).
+  const hideSidebar =
+    !pathname.startsWith("/s/") &&
+    !pathname.startsWith("/settings") &&
+    !pathname.startsWith("/ai");
 
-  const items = links.map((link) => (
-    <Link key={link.label} to={link.link} className={classes.link}>
-      {t(link.label)}
-    </Link>
-  ));
+  const openAiChat = (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
+      return;
+    }
+    // On a page the chat opens in the aside, next to the document.
+    if (isPageRoute) {
+      e.preventDefault();
+      toggleAside("chat");
+    }
+  };
 
   return (
     <>
-      <Group h="100%" px="md" justify="space-between" wrap={"nowrap"}>
-        <Group wrap="nowrap">
+      <div className={classes.inner} data-home={isHomeRoute || isSpacesRoute || undefined}>
+        <Group wrap="nowrap" gap={6} className={classes.start}>
           <Tooltip label={t("Sidebar toggle")}>
             <SidebarToggle
               aria-label={t("Sidebar toggle")}
@@ -74,94 +73,39 @@ export function AppHeader() {
             />
           </Tooltip>
 
-          <Tooltip label={t("Sidebar toggle")}>
-            <SidebarToggle
-              aria-label={t("Sidebar toggle")}
-              opened={desktopOpened}
-              onClick={toggleDesktop}
-              visibleFrom="sm"
-              size="sm"
-            />
-          </Tooltip>
-
-          <Link to="/home" className={classes.brand} aria-label="Docmost">
-            <Box hiddenFrom="sm" className={classes.brandIcon}>
-              <img
-                src="/icons/favicon-32x32.png"
-                alt="Docmost"
-                width={22}
-                height={22}
-              />
-            </Box>
-            <Text
-              size="lg"
-              fw={600}
-              style={{ userSelect: "none" }}
-              visibleFrom="sm"
-            >
-              Docmost
+          <Link to="/home" className={classes.brand} aria-label="AltWiki">
+            <Text component="span" className={classes.wordmark}>
+              AltWiki
             </Text>
           </Link>
 
-          <Group ml={50} gap={5} className={classes.links} visibleFrom="sm">
-            {items}
-          </Group>
+          {!hideSidebar && (
+            <Tooltip label={t("Sidebar toggle")}>
+              <SidebarToggle
+                aria-label={t("Sidebar toggle")}
+                opened={desktopOpened}
+                onClick={toggleDesktop}
+                visibleFrom="sm"
+                size="sm"
+                ml={6}
+                className={classes.toggle}
+              />
+            </Tooltip>
+          )}
         </Group>
 
-        <div>
-          <Group visibleFrom="sm">
-            <SearchControl onClick={searchSpotlight.open} />
-          </Group>
+        <div className={classes.center}>
+          <SearchControl
+            onClick={searchSpotlight.open}
+            visibleFrom="sm"
+            variant="pill"
+          />
           <Group hiddenFrom="sm">
             <SearchMobileControl onSearch={searchSpotlight.open} />
           </Group>
         </div>
 
-        <Group px={"xl"} wrap="nowrap">
-          {aiChatEnabled && (
-            <>
-              <UnstyledButton
-                component={Link}
-                to="/ai"
-                className={classes.link}
-                visibleFrom="sm"
-                onClick={(e: React.MouseEvent) => {
-                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-                    return;
-                  }
-                  if (isPageRoute) {
-                    e.preventDefault();
-                    toggleAside("chat");
-                  }
-                }}
-              >
-                {t("AI Chat")}
-              </UnstyledButton>
-              <Tooltip label={t("AI Chat")} openDelay={250} withArrow>
-                <ActionIcon
-                  component={Link}
-                  to="/ai"
-                  variant="subtle"
-                  color="dark"
-                  size="sm"
-                  hiddenFrom="sm"
-                  aria-label={t("AI Chat")}
-                  onClick={(e: React.MouseEvent) => {
-                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) {
-                      return;
-                    }
-                    if (isPageRoute) {
-                      e.preventDefault();
-                      toggleAside("chat");
-                    }
-                  }}
-                >
-                  <IconSparkles size={20} stroke={2} />
-                </ActionIcon>
-              </Tooltip>
-            </>
-          )}
-          <NotificationPopover />
+        <Group wrap="nowrap" gap="sm" justify="flex-end" className={classes.end}>
           {isCloud() && isTrial && trialDaysLeft !== 0 && (
             <Badge
               variant="light"
@@ -175,9 +119,24 @@ export function AppHeader() {
                 : `${trialDaysLeft} days left`}
             </Badge>
           )}
+          {aiChatEnabled && (
+            <Tooltip label={t("AI Chat")} openDelay={250} withArrow>
+              <ActionIcon
+                component={Link}
+                to="/ai"
+                variant="subtle"
+                color="gray"
+                aria-label={t("AI Chat")}
+                onClick={openAiChat}
+              >
+                <IconSparkles size={18} stroke={1.75} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <NotificationPopover />
           <TopMenu />
         </Group>
-      </Group>
+      </div>
     </>
   );
 }

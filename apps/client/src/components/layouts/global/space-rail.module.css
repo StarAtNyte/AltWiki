@@ -1,0 +1,180 @@
+/* Floating glass rail: 72px wide, 12px from the edges, 18px radius. */
+.rail {
+  width: var(--app-rail-width);
+  flex: 0 0 var(--app-rail-width);
+  margin: rem(12px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* top padding puts the logo centre on the header centre line (96px header) */
+  padding: rem(15px) 0 rem(16px);
+  border-radius: rem(18px);
+  background: var(--app-glass-soft-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-glass-soft-shadow);
+  user-select: none;
+  min-height: 0;
+}
+
+/* Dark ink rounded square with a serif "A". */
+.logo {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(40px);
+  height: rem(40px);
+  border-radius: rem(10px);
+  overflow: hidden;
+  font-family: var(--app-font-serif);
+  font-size: rem(20px);
+  font-weight: 500;
+  line-height: 1;
+  text-decoration: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.top,
+.bottom {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: rem(8px);
+}
+
+.top {
+  margin-top: rem(24px);
+}
+
+.bottom {
+  padding-top: rem(8px);
+}
+
+.divider {
+  flex-shrink: 0;
+  width: rem(32px);
+  height: 1px;
+  margin: rem(16px) 0 rem(12px);
+  background: var(--app-hair);
+}
+
+.spaces {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.spaceList {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: rem(10px);
+  padding: rem(4px) 0 rem(8px);
+}
+
+.item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(40px);
+  height: rem(40px);
+  border-radius: rem(10px);
+  color: var(--app-text-2);
+  transition:
+    background-color var(--app-transition-fast),
+    color var(--app-transition-fast);
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+
+  @mixin hover {
+    color: var(--app-ink);
+  }
+}
+
+/* Space avatars are 32px inside a 40px hit area. */
+.spaceList .item {
+  width: rem(32px);
+  height: rem(32px);
+  border-radius: rem(8px);
+}
+
+.glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(40px);
+  height: rem(40px);
+  border-radius: rem(10px);
+  transition:
+    background-color var(--app-transition-fast),
+    box-shadow var(--app-transition-fast);
+
+  .item:hover & {
+    background: var(--app-row-hover);
+  }
+
+  .item[data-active] & {
+    background: var(--app-tile-active);
+    box-shadow: 0 0 0 1px var(--app-hair);
+    color: var(--app-ink);
+  }
+}
+
+.avatar {
+  transition:
+    opacity var(--app-transition-fast),
+    box-shadow var(--app-transition-fast);
+
+  .item[data-active] & {
+    box-shadow:
+      0 0 0 2px light-dark(#fff, #141821),
+      0 0 0 3.5px var(--app-ink);
+  }
+}
+
+.count {
+  position: absolute;
+  top: rem(2px);
+  right: rem(2px);
+  min-width: rem(14px);
+  height: rem(14px);
+  padding: 0 rem(4px);
+  border-radius: 999px;
+  font-size: rem(9px);
+  font-weight: 500;
+  line-height: rem(14px);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--app-text-2);
+  background: light-dark(#fff, var(--mantine-color-dark-6));
+  box-shadow: 0 0 0 1px var(--app-hair);
+}
+
+.archiveRow {
+  display: flex;
+  align-items: center;
+  gap: rem(10px);
+  width: 100%;
+  padding: rem(6px) rem(8px);
+  border-radius: var(--mantine-radius-sm);
+  transition: background-color var(--app-transition-fast);
+
+  @mixin hover {
+    background: var(--app-hover);
+  }
+
+  &[data-active] {
+    background: var(--app-active);
+  }
+}

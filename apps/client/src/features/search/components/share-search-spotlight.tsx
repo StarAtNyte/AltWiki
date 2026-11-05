@@ -1,15 +1,17 @@
-import { Group, Center, Text } from "@mantine/core";
 import { Spotlight } from "@mantine/spotlight";
-import { IconSearch } from "@tabler/icons-react";
+import { IconFileText, IconSearch } from "@tabler/icons-react";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useShareSearchQuery } from "@/features/search/queries/search-query";
 import { buildSharedPageUrl } from "@/features/page/page.utils.ts";
-import { getPageIcon } from "@/lib";
 import { useTranslation } from "react-i18next";
 import { shareSearchSpotlightStore } from "@/features/search/constants.ts";
 import DOMPurify from "dompurify";
+import {
+  spotlightClassNames,
+  spotlightClasses as classes,
+} from "./spotlight-classes.ts";
 
 interface ShareSearchSpotlightProps {
   shareId?: string;
@@ -38,16 +40,17 @@ export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
       })}
       style={{ userSelect: "none" }}
     >
-      <Group wrap="nowrap" w="100%">
-        <Center>{getPageIcon(page?.icon)}</Center>
+      <div className={classes.row}>
+        <span className={classes.rowIcon} aria-hidden>
+          {page?.icon || <IconFileText size={18} stroke={1.5} />}
+        </span>
 
-        <div style={{ flex: 1 }}>
-          <Text>{page.title}</Text>
+        <div className={classes.rowBody}>
+          <span className={classes.rowTitle}>{page.title}</span>
 
           {page?.highlight && (
-            <Text
-              opacity={0.6}
-              size="xs"
+            <div
+              className={classes.meta}
               dangerouslySetInnerHTML={{
                 __html: DOMPurify.sanitize(page.highlight, {
                   ALLOWED_TAGS: ["mark", "em", "strong", "b"],
@@ -57,7 +60,7 @@ export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
             />
           )}
         </div>
-      </Group>
+      </div>
     </Spotlight.Action>
   ));
 
@@ -68,15 +71,17 @@ export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
         query={query}
         onQueryChange={setQuery}
         scrollable
-        overlayProps={{
-          backgroundOpacity: 0.55,
-        }}
+        radius={18}
+        classNames={spotlightClassNames}
+        overlayProps={{ backgroundOpacity: 0 }}
       >
-        <Spotlight.Search
-          placeholder={t("Search...")}
-          aria-label={t("Search")}
-          leftSection={<IconSearch size={20} stroke={1.5} />}
-        />
+        <div className={classes.header}>
+          <Spotlight.Search
+            placeholder={t("Search...")}
+            leftSection={<IconSearch size={18} stroke={1.5} />}
+            leftSectionWidth={44}
+          />
+        </div>
         <Spotlight.ActionsList>
           {query.length === 0 && pages.length === 0 && (
             <Spotlight.Empty>{t("Start typing to search...")}</Spotlight.Empty>
@@ -86,7 +91,11 @@ export function ShareSearchSpotlight({ shareId }: ShareSearchSpotlightProps) {
             <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
           )}
 
-          {pages.length > 0 && pages}
+          {pages.length > 0 && (
+            <Spotlight.ActionsGroup label={t("Pages")}>
+              {pages}
+            </Spotlight.ActionsGroup>
+          )}
         </Spotlight.ActionsList>
       </Spotlight.Root>
     </>

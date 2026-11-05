@@ -46,6 +46,8 @@ export function SearchSpotlightFilters({
 }: SearchSpotlightFiltersProps) {
   const { t } = useTranslation();
   const hasAttachmentIndexing = useHasFeature(Feature.ATTACHMENT_INDEXING);
+  // AI answers are a licensed feature: the switch stays hidden without one.
+  const hasAiFeature = useHasFeature(Feature.AI);
   const [selectedSpaceId, setSelectedSpaceId] = useState<string | null>(
     spaceId || null
   );
@@ -142,7 +144,7 @@ export function SearchSpotlightFilters({
 
   return (
     <div className={classes.filtersContainer}>
-      {workspace?.settings?.ai?.search === true && (
+      {hasAiFeature && workspace?.settings?.ai?.search === true && (
         <div
           style={{
             display: "flex",
@@ -209,8 +211,8 @@ export function SearchSpotlightFilters({
             variant="subtle"
             color="gray"
             size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconFileDescription size={16} />}
+            rightSection={<IconChevronDown size={14} stroke={1.5} />}
+            leftSection={<IconFileDescription size={15} stroke={1.5} />}
             className={classes.filterButton}
             fw={500}
           >
@@ -248,7 +250,7 @@ export function SearchSpotlightFilters({
                     </Text>
                   )}
                 </div>
-                {contentType === option.value && <IconCheck size={20} aria-hidden />}
+                {contentType === option.value && <IconCheck size={16} stroke={1.75} aria-hidden />}
               </Group>
             </Menu.Item>
           ))}

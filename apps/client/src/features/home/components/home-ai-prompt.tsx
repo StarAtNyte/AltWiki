@@ -37,14 +37,10 @@ export default function HomeAiPrompt() {
     navigate("/ai", { state });
   };
 
+  // The AltWiki home already greets the user, so only the glass prompt is
+  // shown there.
   return (
     <div className={classes.wrapper}>
-      <h1 className={classes.heading}>
-        {t("Welcome to {{name}}", { name: workspace?.name ?? "Docmost" })}
-      </h1>
-      <div className={classes.subtitle}>
-        {t("Ask anything or search your workspace")}
-      </div>
 
       <div className={classes.inputContainer}>
         <ChatInput

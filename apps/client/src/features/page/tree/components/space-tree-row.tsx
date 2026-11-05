@@ -1,8 +1,9 @@
-import { useRef } from "react";
+import React, { useRef } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useTranslation } from "react-i18next";
-import { ActionIcon, rem } from "@mantine/core";
+import { ActionIcon, Checkbox, rem } from "@mantine/core";
+import clsx from "clsx";
 import {
   IconChevronDown,
   IconChevronRight,
@@ -25,7 +26,11 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 
-import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import {
+  selectedPageIdsAtom,
+  selectionModeAtom,
+  treeDataAtom,
+} from "@/features/page/tree/atoms/tree-data-atom.ts";
 import { treeModel } from "@/features/page/tree/model/tree-model";
 import { useTreeMutation } from "@/features/page/tree/hooks/use-tree-mutation.ts";
 import type { SpaceTreeNode } from "@/features/page/tree/types.ts";
@@ -40,6 +45,7 @@ type SpaceTreeRowProps = RenderRowProps<SpaceTreeNode> & {
 
 export function SpaceTreeRow({
   node,
+  level,
   isOpen,
   hasChildren,
   toggleOpen,
@@ -56,6 +62,11 @@ export function SpaceTreeRow({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mobileSidebarOpened] = useAtom(mobileSidebarAtom);
   const toggleMobileSidebar = useToggleSidebar(mobileSidebarAtom);
+
+  // AltWiki bulk selection (toggled from the space sidebar).
+  const selectionMode = useAtomValue(selectionModeAtom);
+  const isBulkSelected = useAtomValue(selectedPageIdsAtom).has(node.id);
+  const setSelectedPageIds = useSetAtom(selectedPageIdsAtom);
 
   const canEdit = !readOnly && node.canEdit !== false;
   const pageUrl = buildPageUrl(spaceSlug, node.slugId, node.name);
@@ -138,14 +149,34 @@ export function SpaceTreeRow({
     }
   };
 
+  const handleCheckboxClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedPageIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(node.id)) {
+        next.delete(node.id);
+      } else {
+        next.add(node.id);
+      }
+      return next;
+    });
+  };
+
   return (
     <Link
       ref={rowRef as React.Ref<HTMLAnchorElement>}
       to={pageUrl}
-      className={classes.node}
+      className={clsx(classes.node, isBulkSelected && classes.bulkSelected)}
+      style={{ "--tree-level": level } as React.CSSProperties}
       tabIndex={tabIndex}
       {...treeItemProps}
       onClick={() => {
+        // AltWiki: opening a page also reveals its children (never
+        // collapses it); the chevron keeps toggling independently.
+        if (!isOpen && hasChildren) {
+          toggleOpen();
+        }
         if (mobileSidebarOpened) {
           toggleMobileSidebar();
         }
@@ -153,6 +184,22 @@ export function SpaceTreeRow({
       onMouseEnter={prefetchPage}
       onMouseLeave={cancelPagePrefetch}
     >
+      {canEdit && selectionMode && (
+        <div
+          className={clsx(classes.checkbox, classes.checkboxVisible)}
+          onClick={handleCheckboxClick}
+        >
+          <Checkbox
+            size="xs"
+            checked={isBulkSelected}
+            onChange={() => {}}
+            onClick={handleCheckboxClick}
+            aria-label={t("Select page")}
+            tabIndex={-1}
+          />
+        </div>
+      )}
+
       <PageArrow
         isOpen={isOpen}
         hasChildren={hasChildren}

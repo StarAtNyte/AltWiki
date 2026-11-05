@@ -1,3 +1,4 @@
+import { assignRandomSpaceIcon } from "@/features/space/icons/space-icons.ts";
 import {
   keepPreviousData,
   useInfiniteQuery,
@@ -18,6 +19,7 @@ import {
   getSpaceById,
   getSpaceMembers,
   getSpaces,
+  joinSpace,
   removeSpaceMember,
   createSpace,
   updateSpace,
@@ -37,6 +39,35 @@ export function useGetSpacesQuery(
   return useQuery({
     queryKey: ["spaces", params],
     queryFn: () => getSpaces(params),
+    placeholderData: keepPreviousData,
+    refetchOnMount: true,
+  });
+}
+
+/**
+ * Every space the user can see (member spaces plus open spaces flagged with
+ * isMember=false), walking the cursor pages. Used by the space rail, the home
+ * grid, quick create and the search filters, which all need the full list.
+ * Shares the "spaces" key prefix so space mutations invalidate it too.
+ */
+export const ALL_SPACES_QUERY_KEY = ["spaces", "all"];
+const ALL_SPACES_MAX = 1000;
+
+export async function fetchAllSpaces(): Promise<ISpace[]> {
+  const items: ISpace[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await getSpaces({ limit: 100, cursor });
+    items.push(...page.items);
+    cursor = page.meta?.hasNextPage ? page.meta.nextCursor ?? undefined : undefined;
+  } while (cursor && items.length < ALL_SPACES_MAX);
+  return items;
+}
+
+export function useAllSpacesQuery(): UseQueryResult<ISpace[], Error> {
+  return useQuery({
+    queryKey: ALL_SPACES_QUERY_KEY,
+    queryFn: fetchAllSpaces,
     placeholderData: keepPreviousData,
     refetchOnMount: true,
   });
@@ -83,11 +114,22 @@ export function useCreateSpaceMutation() {
 
   return useMutation<ISpace, Error, Partial<ISpace>>({
     mutationFn: (data) => createSpace(data),
-    onSuccess: () => {
+    onSuccess: (space) => {
       queryClient.invalidateQueries({
         queryKey: ["spaces"],
       });
       notifications.show({ message: t("Space created successfully") });
+      // Give the new space a random icon. Never blocks or fails creation.
+      if (space?.id && !space.logo) {
+        assignRandomSpaceIcon(space.id)
+          .then(() =>
+            queryClient.invalidateQueries({
+              predicate: (item) =>
+                ["spaces", "space"].includes(item.queryKey[0] as string),
+            }),
+          )
+          .catch((err) => console.warn("Could not set space icon", err));
+      }
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;
@@ -183,6 +225,23 @@ export function useDeleteSpaceMutation() {
       queryClient.invalidateQueries({
         predicate: (item) => ["spaces"].includes(item.queryKey[0] as string),
       });
+    },
+    onError: (error) => {
+      const errorMessage = error["response"]?.data?.message;
+      notifications.show({ message: errorMessage, color: "red" });
+    },
+  });
+}
+
+export function useJoinSpaceMutation() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation<void, Error, string>({
+    mutationFn: (spaceId) => joinSpace(spaceId),
+    onSuccess: () => {
+      notifications.show({ message: t("Successfully joined space") });
+      queryClient.invalidateQueries({ queryKey: ["spaces"] });
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;

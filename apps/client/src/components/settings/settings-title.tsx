@@ -4,10 +4,10 @@ import { Divider, Title } from '@mantine/core';
 export default function SettingsTitle({ title }: { title: string }) {
   return (
     <>
-      <Title order={1} size="h3">
+      <Title order={3} fw={600}>
         {title}
       </Title>
-      <Divider my="md" />
+      <Divider my="md" color="var(--app-border-subtle)" />
     </>
   );
 }

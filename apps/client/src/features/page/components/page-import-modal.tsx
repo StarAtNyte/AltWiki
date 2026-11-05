@@ -96,7 +96,8 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
   const confluenceFileRef = useRef<() => void>(null);
   const zipFileRef = useRef<() => void>(null);
 
-  const canUseConfluence = useHasFeature(Feature.CONFLUENCE_IMPORT);
+  // AltWiki: Confluence import is built in (no licence needed); DOCX/PDF
+  // importers are EE-only and hidden without the feature.
   const canUseDocx = useHasFeature(Feature.DOCX_IMPORT);
   const canUsePdf = useHasFeature(Feature.PDF_IMPORT);
   const upgradeLabel = useUpgradeLabel();
@@ -374,6 +375,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
           )}
         </FileButton>
 
+        {canUseDocx && (
         <FileButton
           onChange={handleFileUpload}
           accept=".docx"
@@ -400,7 +402,9 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
             </Tooltip>
           )}
         </FileButton>
+        )}
 
+        {canUsePdf && (
         <FileButton
           onChange={handleFileUpload}
           accept=".pdf"
@@ -427,6 +431,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
             </Tooltip>
           )}
         </FileButton>
+        )}
 
         <FileButton
           onChange={(file) => handleZipUpload(file, "notion")}
@@ -456,20 +461,14 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
           }}
         >
           {(props) => (
-            <Tooltip
-              label={upgradeLabel}
-              disabled={canUseConfluence}
+            <Button
+              justify="start"
+              variant="default"
+              leftSection={<ConfluenceIcon size={18} />}
+              {...props}
             >
-              <Button
-                disabled={!canUseConfluence}
-                justify="start"
-                variant="default"
-                leftSection={<ConfluenceIcon size={18} />}
-                {...props}
-              >
-                Confluence
-              </Button>
-            </Tooltip>
+              Confluence
+            </Button>
           )}
         </FileButton>
       </SimpleGrid>
@@ -477,11 +476,11 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
       <Group justify="center" gap="xl" mih={150}>
         <div>
           <Text ta="center" size="lg" inline>
-            Import zip file
+            Import file
           </Text>
           <Text ta="center" size="sm" c="dimmed" inline py="sm">
             {t(
-              `Upload zip file containing Markdown and HTML files. Max: {{sizeLimit}}`,
+              `Upload ZIP, Markdown, or PDF file. Max: {{sizeLimit}}`,
               {
                 sizeLimit: formatBytes(getFileImportSizeLimit()),
               },
@@ -489,7 +488,7 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
           </Text>
           <FileButton
             onChange={(file) => handleZipUpload(file, "generic")}
-            accept="application/zip"
+            accept="application/zip,.md,.pdf,application/pdf"
             resetRef={zipFileRef}
             inputProps={{
               "aria-label": t("Choose {{format}} file", { format: "ZIP" }),

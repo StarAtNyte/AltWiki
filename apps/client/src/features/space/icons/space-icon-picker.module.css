@@ -1,0 +1,137 @@
+.overlay {
+  background: light-dark(rgba(244, 242, 238, 0.35), rgba(10, 12, 18, 0.45)) !important;
+  backdrop-filter: var(--app-overlay-blur);
+  -webkit-backdrop-filter: var(--app-overlay-blur);
+}
+
+.content {
+  border-radius: rem(18px) !important;
+  background: light-dark(rgba(255, 255, 255, 0.9), rgba(22, 26, 35, 0.88)) !important;
+  /* No blur of its own: it already sits on the blurred overlay. */
+  border: 1px solid light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 0 0 1px light-dark(rgba(15, 23, 42, 0.06), rgba(0, 0, 0, 0.3)),
+    0 16px 40px light-dark(rgba(15, 23, 42, 0.1), rgba(0, 0, 0, 0.35));
+}
+
+.header {
+  background: transparent !important;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: rem(16px);
+  padding: rem(4px) 0 rem(16px);
+  border-bottom: 1px solid var(--app-hair);
+  margin-bottom: rem(14px);
+}
+
+.preview {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(64px);
+  height: rem(64px);
+  border-radius: rem(16px);
+}
+
+.topBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: rem(10px);
+}
+
+.spaceName {
+  font-size: rem(15px);
+  font-weight: 600;
+  color: var(--app-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: rem(8px);
+}
+
+.swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(26px);
+  height: rem(26px);
+  border-radius: 999px;
+  transition: box-shadow var(--app-transition);
+
+  &[data-active] {
+    box-shadow:
+      0 0 0 2px light-dark(#fff, rgb(22, 26, 35)),
+      0 0 0 4px var(--app-ink);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 3px;
+  }
+}
+
+.search {
+  margin-bottom: rem(12px);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: rem(6px);
+  max-height: rem(340px);
+  overflow-y: auto;
+  padding: rem(3px);
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+.cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: rem(10px);
+  color: var(--app-text-2);
+  border: 1px solid transparent;
+  transition:
+    background-color var(--app-transition),
+    border-color var(--app-transition);
+
+  @mixin hover {
+    background: var(--app-row-hover);
+    border-color: var(--app-hair);
+    color: var(--app-ink);
+  }
+
+  &[data-active] {
+    color: var(--app-ink);
+    background: light-dark(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.08));
+    border-color: transparent;
+    box-shadow: 0 0 0 2px var(--app-ink);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+.empty {
+  grid-column: 1 / -1;
+  padding: rem(24px) 0;
+  text-align: center;
+  font-size: rem(13px);
+  color: var(--app-muted);
+}

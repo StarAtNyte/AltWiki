@@ -1,18 +1,20 @@
-import { Text, SimpleGrid, Card, rem, Group, Box, Button, Title } from "@mantine/core";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import clsx from "clsx";
+import { IconChevronDown, IconStar } from "@tabler/icons-react";
 import { useFavoritesQuery } from "@/features/favorite/queries/favorite-query";
-import { CustomAvatar } from "@/components/ui/custom-avatar";
-import { AvatarIconType } from "@/features/attachments/types/attachment.types";
 import { getSpaceUrl } from "@/lib/config";
 import { prefetchSpace } from "@/features/space/queries/space-query";
 import StarButton from "@/features/favorite/components/star-button";
-import { IconChevronDown } from "@tabler/icons-react";
+import { SpaceAvatar } from "@/components/ui/space-avatar.tsx";
+import homeClasses from "@/features/home/components/home.module.css";
 import spaceClasses from "../space-grid.module.css";
+import classes from "./all-spaces-list.module.css";
 
 const INITIAL_COUNT = 8;
 
+/** Starred spaces, in the glass card style of the home Spaces panel. */
 export default function FavoriteSpacesGrid() {
   const { t } = useTranslation();
   const { data } = useFavoritesQuery("space");
@@ -29,63 +31,53 @@ export default function FavoriteSpacesGrid() {
     : allSpaces.slice(0, INITIAL_COUNT);
 
   return (
-    <Box mb="xl">
-      <Title order={2} size="h6" fw={500} mb="md">
-        {t("Favorite spaces")}
-      </Title>
-
-      <SimpleGrid cols={{ base: 1, xs: 2, sm: 4 }}>
-        {visibleSpaces.map((fav) => (
-          <Card
-            key={fav.id}
-            p="xs"
-            radius="md"
-            component={Link}
-            to={getSpaceUrl(fav.space!.slug)}
-            onMouseEnter={() =>
-              prefetchSpace(fav.space!.slug, fav.space!.id)
-            }
-            className={spaceClasses.card}
-            withBorder
-          >
-            <Card.Section className={spaceClasses.cardSection} h={40}>
-              <div className={spaceClasses.starButton} data-favorited="true">
-                <StarButton
-                  type="space"
-                  spaceId={fav.space!.id}
-                  name={fav.space!.name}
-                  size={16}
-                />
-              </div>
-            </Card.Section>
-            <CustomAvatar
-              name={fav.space!.name}
-              avatarUrl={fav.space!.logo}
-              type={AvatarIconType.SPACE_ICON}
-              color="initials"
-              variant="filled"
-              size="md"
-              mt={rem(-20)}
-            />
-            <Text fz="md" fw={500} mt="xs" className={spaceClasses.title}>
-              {fav.space!.name}
-            </Text>
-          </Card>
-        ))}
-      </SimpleGrid>
-
-      {!expanded && allSpaces.length > INITIAL_COUNT && (
-        <Group justify="center" mt="sm">
-          <Button
-            variant="subtle"
-            size="xs"
-            rightSection={<IconChevronDown size={14} />}
+    <section className={clsx(homeClasses.glass, classes.panel, classes.favorites)}>
+      <div className={classes.panelHead}>
+        <h2 className={homeClasses.panelTitle}>
+          <IconStar size={18} stroke={1.6} className={homeClasses.panelIcon} />
+          {t("Favorite spaces")}
+          <span className={homeClasses.count}>{allSpaces.length}</span>
+        </h2>
+        {!expanded && allSpaces.length > INITIAL_COUNT && (
+          <button
+            type="button"
+            className={homeClasses.link}
             onClick={() => setExpanded(true)}
           >
             {t("Show more")}
-          </Button>
-        </Group>
-      )}
-    </Box>
+            <IconChevronDown size={14} stroke={1.75} />
+          </button>
+        )}
+      </div>
+
+      <div className={spaceClasses.grid}>
+        {visibleSpaces.map((fav) => (
+          <Link
+            key={fav.id}
+            to={getSpaceUrl(fav.space!.slug)}
+            onMouseEnter={() => prefetchSpace(fav.space!.slug, fav.space!.id)}
+            className={spaceClasses.card}
+          >
+            <span className={spaceClasses.cardTop}>
+              <SpaceAvatar
+                name={fav.space!.name}
+                logo={fav.space!.logo}
+                size={32}
+                radius={8}
+              />
+              <StarButton
+                type="space"
+                spaceId={fav.space!.id}
+                name={fav.space!.name}
+                size={15}
+              />
+            </span>
+            <span className={spaceClasses.body}>
+              <span className={spaceClasses.title}>{fav.space!.name}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }

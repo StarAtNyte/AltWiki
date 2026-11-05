@@ -1,10 +1,520 @@
-.page {
-    display: block;
-    width: 100%;
-    padding: var(--mantine-spacing-md);
-    color: light-dark(var(--mantine-color-black), var(--mantine-color-dark-0));
+/*
+ * Home: "calm alpine glass". 12-column grid, 24px gutters, 20px panel padding,
+ * glass panels over the background photo.
+ */
 
-    @mixin hover {
-        background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-8));
+/* Content frame shared with the header (app-header.module.css [data-home]):
+   1184px, centred between the rail's outer edge and the viewport edge. */
+.frame {
+  max-width: calc(rem(1184px) + rem(36px));
+  margin-inline: auto;
+  padding: rem(24px) rem(24px) rem(40px) rem(12px);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    padding: rem(16px) rem(16px) rem(32px);
+  }
+}
+
+/* ---------- glass ---------- */
+
+.glass {
+  background: var(--app-glass-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-glass-shadow);
+  border-radius: rem(18px);
+  min-width: 0;
+}
+
+/* ---------- greeting ---------- */
+
+.greeting {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: rem(16px);
+  margin-bottom: rem(32px);
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    flex-direction: column;
+    align-items: stretch;
+    margin-bottom: rem(24px);
+  }
+}
+
+.greetingTitle {
+  margin: 0;
+  font-family: var(--app-font-serif);
+  font-size: rem(40px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: var(--app-ink);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    font-size: rem(30px);
+  }
+}
+
+.greetingSub {
+  margin-top: rem(8px);
+  font-size: rem(15px);
+  color: var(--app-text-2);
+}
+
+.greetingDot {
+  color: var(--app-muted);
+  margin-inline: rem(4px);
+}
+
+.greetingAction {
+  flex-shrink: 0;
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    align-self: flex-start;
+  }
+}
+
+/* ---------- row 1: recent (8) + right column (4) ---------- */
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: rem(24px);
+  align-items: stretch;
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    gap: rem(16px);
+  }
+}
+
+.colMain {
+  grid-column: span 8;
+  display: flex;
+  flex-direction: column;
+
+  @media (max-width: $mantine-breakpoint-md) {
+    grid-column: span 12;
+  }
+}
+
+.colSide {
+  grid-column: span 4;
+  display: flex;
+  flex-direction: column;
+  gap: rem(24px);
+  min-width: 0;
+
+  @media (max-width: $mantine-breakpoint-md) {
+    grid-column: span 12;
+    order: -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    gap: rem(16px);
+  }
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- panel chrome ---------- */
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: rem(12px);
+}
+
+.panelTitle {
+  display: flex;
+  align-items: center;
+  gap: rem(8px);
+  margin: 0;
+  font-size: rem(16px);
+  font-weight: 600;
+  line-height: 1.5;
+  color: var(--app-ink);
+}
+
+.panelIcon {
+  flex-shrink: 0;
+  color: var(--app-text-2);
+}
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  height: rem(20px);
+  padding: 0 rem(8px);
+  border-radius: 999px;
+  font-size: rem(12px);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--app-text-2);
+  background: var(--app-tile-bg);
+  box-shadow: 0 0 0 1px var(--app-hair);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(4px);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: rem(13px);
+  font-weight: 500;
+  color: var(--app-accent);
+  text-decoration: none;
+  border-radius: rem(4px);
+  white-space: nowrap;
+  transition: color var(--app-transition);
+
+  @mixin hover {
+    color: var(--app-accent-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+/* ---------- recent edits ---------- */
+
+.recent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.recentHead {
+  padding: rem(20px) rem(20px) rem(8px);
+}
+
+.recentBody {
+  padding: 0 rem(8px) rem(8px);
+}
+
+/* ---------- side panels ---------- */
+
+.sidePanel {
+  padding: rem(20px);
+  display: flex;
+  flex-direction: column;
+}
+
+.continue {
+  flex: 1;
+}
+
+.continue .panelHead,
+.create .panelHead {
+  margin-bottom: rem(16px);
+}
+
+.roundLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(28px);
+  height: rem(28px);
+  border-radius: 999px;
+  background: var(--app-tile-active);
+  box-shadow: 0 0 0 1px var(--app-hair);
+  color: var(--app-ink);
+  transition: background-color var(--app-transition);
+
+  @mixin hover {
+    background: var(--app-tile-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.continueMain {
+  display: flex;
+  gap: rem(16px);
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: rem(12px);
+
+  @mixin hover {
+    .continueTitle {
+      color: var(--app-accent);
     }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.thumb {
+  flex-shrink: 0;
+  width: rem(88px);
+  height: rem(88px);
+  border-radius: rem(12px);
+  background-color: var(--app-plain-bg);
+  background-repeat: no-repeat;
+  box-shadow: 0 0 0 1px var(--app-hair);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-muted);
+}
+
+.thumbCrop {
+  background-size: 300%;
+  background-position: 45% 40%;
+}
+
+.thumbCover {
+  background-size: cover;
+  background-position: center;
+}
+
+.continueText {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.continueTitle {
+  font-family: var(--app-font-serif);
+  font-size: rem(17px);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--app-ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color var(--app-transition);
+}
+
+.continueEmoji {
+  margin-right: rem(6px);
+}
+
+.metaLine {
+  margin-top: rem(6px);
+  font-size: rem(12.5px);
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hr {
+  height: 1px;
+  margin: rem(16px) 0;
+  background: var(--app-hair);
+}
+
+.moreLabel {
+  margin-bottom: rem(8px);
+  font-size: rem(12.5px);
+  color: var(--app-muted);
+}
+
+.moreItem {
+  display: flex;
+  align-items: center;
+  gap: rem(8px);
+  min-width: 0;
+  padding: rem(4px) 0;
+  font-size: rem(13.5px);
+  color: var(--app-ink);
+  text-decoration: none;
+  transition: color var(--app-transition);
+
+  @mixin hover {
+    color: var(--app-accent);
+  }
+}
+
+.moreIcon {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--app-muted);
+  font-size: rem(13px);
+}
+
+.moreTitle {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptyTitle {
+  font-size: rem(14px);
+  font-weight: 500;
+  color: var(--app-ink);
+}
+
+.emptyText {
+  margin-top: rem(4px);
+  font-size: rem(12.5px);
+  color: var(--app-muted);
+}
+
+/* ---------- new page ---------- */
+
+.selectInput {
+  height: rem(40px);
+  border-radius: rem(10px);
+  border: 0;
+  background: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.06));
+  box-shadow: 0 0 0 1px var(--app-hair);
+  font-size: rem(14px);
+  color: var(--app-ink);
+
+  &:focus,
+  &:focus-within {
+    box-shadow: 0 0 0 2px var(--app-focus-ring);
+  }
+}
+
+.createButton {
+  --button-bg: light-dark(#1f2533, #e6e9ef);
+  --button-hover: light-dark(#2b3244, #ffffff);
+  --button-color: light-dark(#fff, #1f2533);
+  --button-bd: none;
+  background: light-dark(#1f2533, #e6e9ef);
+  color: light-dark(#fff, #1f2533);
+  border: 0;
+  margin-top: rem(12px);
+  height: rem(40px);
+  border-radius: rem(10px);
+  font-size: rem(14px);
+  font-weight: 500;
+
+  @mixin hover {
+    background: light-dark(#2b3244, #ffffff);
+  }
+
+  &:disabled,
+  &[data-disabled] {
+    background: light-dark(rgba(31, 37, 51, 0.35), rgba(230, 233, 239, 0.3));
+    color: light-dark(#fff, #1f2533);
+  }
+}
+
+/* ---------- spaces ---------- */
+
+.spaces {
+  margin-top: rem(24px);
+  padding: rem(20px);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    margin-top: rem(16px);
+  }
+}
+
+.spaces .panelHead {
+  margin-bottom: rem(16px);
+}
+
+/* ---------- legacy section chrome (space home, spaces page) ---------- */
+
+.section {
+  margin-bottom: rem(40px);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mantine-spacing-sm);
+  min-height: rem(26px);
+  margin-bottom: rem(10px);
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: rem(8px);
+  margin: 0;
+  font-size: rem(16px);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--app-ink);
+}
+
+.sectionCount {
+  font-size: rem(12px);
+  font-weight: 400;
+  color: var(--app-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel {
+  background-color: var(--app-surface);
+  border: 1px solid var(--app-border-subtle);
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+}
+
+/* ---------- panel tabs (recent / favorites / created by me) ---------- */
+
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(2px);
+  min-width: 0;
+  padding: rem(3px);
+  border-radius: 999px;
+  background: var(--app-tile-bg);
+  box-shadow: 0 0 0 1px var(--app-hair);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab {
+  flex-shrink: 0;
+  height: rem(28px);
+  padding: 0 rem(12px);
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: rem(13px);
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--app-text-2);
+  transition:
+    background var(--app-transition-fast),
+    color var(--app-transition-fast);
+
+  @mixin hover {
+    color: var(--app-ink);
+  }
+
+  &[data-active] {
+    color: var(--app-ink);
+    background: var(--app-glass-strong-bg);
+    box-shadow: var(--app-glass-soft-shadow);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 1px;
+  }
 }

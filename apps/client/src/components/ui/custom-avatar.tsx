@@ -2,6 +2,7 @@ import React from "react";
 import { Avatar, MantineColor } from "@mantine/core";
 import { getAvatarUrl } from "@/lib/config.ts";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import { SpaceAvatar } from "@/components/ui/space-avatar.tsx";
 
 interface CustomAvatarProps {
   avatarUrl?: string;
@@ -52,6 +53,18 @@ export const CustomAvatar = React.forwardRef<
   HTMLInputElement,
   CustomAvatarProps
 >(({ avatarUrl, name, type, color, variant, ...props }: CustomAvatarProps, ref) => {
+  // Spaces use the curated deterministic palette instead of random initials colours.
+  if (type === AvatarIconType.SPACE_ICON) {
+    return (
+      <SpaceAvatar
+        ref={ref as any}
+        name={name}
+        logo={avatarUrl}
+        {...props}
+      />
+    );
+  }
+
   const avatarLink = getAvatarUrl(avatarUrl, type);
   const isInitials = !color || color === "initials";
   const pickedColor = isInitials ? pickInitialsColor(name ?? "") : color;

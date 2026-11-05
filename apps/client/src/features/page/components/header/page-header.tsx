@@ -32,8 +32,8 @@ export default function PageHeader({ readOnly }: Props) {
 
   return (
     <div className={classes.header} data-page-header="true">
-      <Group justify="space-between" h="100%" px="md" wrap="nowrap" className={classes.group}>
-        <Group gap="xs" wrap="nowrap" style={{ minWidth: 0 }}>
+      <Group justify="space-between" h="100%" wrap="nowrap" gap="md" className={classes.group}>
+        <Group gap="xs" wrap="nowrap" className={classes.crumbs}>
           <Breadcrumb />
 
           {showPublicBadge && (
@@ -59,7 +59,7 @@ export default function PageHeader({ readOnly }: Props) {
           )}
         </Group>
 
-        <Group justify="flex-end" h="100%" px="md" wrap="nowrap" gap="var(--mantine-spacing-xs)">
+        <Group justify="flex-end" h="100%" wrap="nowrap" gap={6} className={classes.actions}>
           <PageHeaderMenu readOnly={readOnly} />
         </Group>
       </Group>

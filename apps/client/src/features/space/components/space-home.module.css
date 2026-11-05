@@ -1,10 +1,94 @@
-.page {
-    display: block;
-    width: 100%;
-    padding: var(--mantine-spacing-md);
-    color: light-dark(var(--mantine-color-black), var(--mantine-color-dark-0));
+.container {
+  padding-top: rem(24px);
+  padding-bottom: rem(48px);
 
-    @mixin hover {
-        background-color: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-8));
-    }
+  @media (max-width: $mantine-breakpoint-sm) {
+    padding-top: var(--mantine-spacing-md);
+  }
+}
+
+/* Glass header panel: avatar, serif name, meta, primary action. */
+.header {
+  display: flex;
+  align-items: center;
+  gap: rem(16px);
+  padding: rem(20px);
+  margin-bottom: rem(24px);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    flex-wrap: wrap;
+    margin-bottom: rem(16px);
+  }
+}
+
+.headerText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: rem(3px);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--app-font-serif);
+  font-size: rem(28px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--app-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    font-size: rem(19px);
+  }
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: rem(4px) rem(12px);
+  font-size: rem(14px);
+  color: var(--app-text-2);
+}
+
+.desc {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.members {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(4px);
+  font-size: rem(12.5px);
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.action {
+  flex-shrink: 0;
+  margin-top: 0 !important;
+  padding-inline: rem(16px);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    width: 100%;
+  }
+}
+
+.page {
+  display: block;
+  width: 100%;
+  padding: var(--mantine-spacing-md);
+  color: light-dark(var(--mantine-color-black), var(--mantine-color-dark-0));
+
+  @mixin hover {
+    background-color: var(--app-hover);
+  }
 }

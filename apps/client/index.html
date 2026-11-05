@@ -2,18 +2,42 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/logo-mark.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16x16.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0 user-scalable=no" />
-    <title>Docmost</title>
-    <meta name="theme-color" content="#1f1f1f" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+    <title>AltWiki</title>
+    <meta name="theme-color" content="#141416" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-touch-fullscreen" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Docmost" />
+    <meta name="apple-mobile-web-app-title" content="AltWiki" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <script>
+      // Apply the colour scheme before React mounts (no light flash in dark
+      // mode). Same storage key Mantine uses; defaults to light, but a saved
+      // "dark" or "auto" (follow the OS) choice is respected.
+      try {
+        var s = localStorage.getItem("mantine-color-scheme-value") || "light";
+        if (s === "auto") s = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.setAttribute("data-mantine-color-scheme", s);
+      } catch (e) {}
+      // Start fetching the background photo in parallel with the JS bundle:
+      // the user's last one, or the default preset. Nothing else is preloaded.
+      try {
+        var bg = localStorage.getItem("altwiki.background.last") || "/backgrounds/ridge.jpg";
+        if (bg !== "none" && bg.charAt(0) === "/") {
+          var l = document.createElement("link");
+          l.rel = "preload";
+          l.as = "image";
+          l.href = bg;
+          document.head.appendChild(l);
+        }
+      } catch (e) {}
+    </script>
     <!--meta-tags-->
   </head>
   <body>

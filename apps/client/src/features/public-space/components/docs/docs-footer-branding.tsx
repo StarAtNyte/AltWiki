@@ -3,20 +3,15 @@ import styles from "./docs.module.css";
 
 export default function DocsFooterBranding({
   className,
-  refSource = "public-space",
 }: {
   className?: string;
+  // Kept for call-site compatibility; AltWiki branding has no referral link.
   refSource?: string;
 }) {
   return (
     <footer className={clsx(styles.footer, className)}>
-      <a
-        className={styles.footerBranding}
-        href={`https://docmost.com?ref=${refSource}`}
-        target="_blank"
-        rel="noreferrer"
-      >
-        Powered by Docmost
+      <a className={styles.footerBranding} href="#">
+        Powered by AltWiki
       </a>
     </footer>
   );

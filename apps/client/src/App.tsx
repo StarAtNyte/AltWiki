@@ -1,7 +1,10 @@
 import { Suspense, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
-import Layout from "@/components/layouts/global/layout.tsx";
+import Home from "@/pages/dashboard/home";
 import { Error404 } from "@/components/ui/error-404.tsx";
+import Layout from "@/components/layouts/global/layout.tsx";
+import AuthLayout from "@/features/auth/components/auth-layout.tsx";
+import { RouteFallback } from "@/components/layouts/global/route-fallback.tsx";
 import { isCloud } from "@/lib/config.ts";
 import { lazyWithPrefetch, prefetchLazyComponents } from "@/lib/lazy-prefetch.ts";
 import { useTranslation } from "react-i18next";
@@ -11,7 +14,7 @@ import { useTrackOrigin } from "@/hooks/use-track-origin";
 
 const SetupWorkspace = lazyWithPrefetch(() => import("@/pages/auth/setup-workspace.tsx"));
 const LoginPage = lazyWithPrefetch(() => import("@/pages/auth/login"));
-const Home = lazyWithPrefetch(() => import("@/pages/dashboard/home"));
+// Home stays in the entry chunk with the shell; every other route is split.
 const Page = lazyWithPrefetch(() => import("@/pages/page/page"), {
   prefetchFirst: true,
 });
@@ -109,20 +112,25 @@ export default function App() {
   }, []);
 
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route index element={<Navigate to="/home" />} />
-        <Route path={"/login"} element={<LoginPage />} />
-        <Route path={"/invites/:invitationId"} element={<InviteSignup />} />
-        <Route path={"/forgot-password"} element={<ForgotPassword />} />
-        <Route path={"/password-reset"} element={<PasswordReset />} />
-        <Route path={"/login/mfa"} element={<MfaChallengePage />} />
-        <Route path={"/login/mfa/setup"} element={<MfaSetupRequiredPage />} />
-        <Route path={"/oauth/consent"} element={<OAuthConsent />} />
+        <Route element={<AuthLayout />}>
+          <Route path={"/login"} element={<LoginPage />} />
+          <Route path={"/invites/:invitationId"} element={<InviteSignup />} />
+          <Route path={"/forgot-password"} element={<ForgotPassword />} />
+          <Route path={"/password-reset"} element={<PasswordReset />} />
+          <Route path={"/login/mfa"} element={<MfaChallengePage />} />
+          <Route
+            path={"/login/mfa/setup"}
+            element={<MfaSetupRequiredPage />}
+          />
+          <Route path={"/oauth/consent"} element={<OAuthConsent />} />
 
-        {!isCloud() && (
-          <Route path={"/setup/register"} element={<SetupWorkspace />} />
-        )}
+          {!isCloud() && (
+            <Route path={"/setup/register"} element={<SetupWorkspace />} />
+          )}
+        </Route>
 
         {isCloud() && (
           <>

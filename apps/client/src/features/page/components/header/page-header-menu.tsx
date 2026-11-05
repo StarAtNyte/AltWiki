@@ -121,11 +121,12 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <ActionIcon
           variant="subtle"
-          color="dark"
+          color="gray"
+          size={32}
           aria-label={t("Comments")}
           {...commentsTriggerProps}
         >
-          <IconMessage size={20} stroke={2} />
+          <IconMessage size={19} stroke={1.8} />
         </ActionIcon>
       </Tooltip>
 
@@ -133,11 +134,12 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
         <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
           <ActionIcon
             variant="subtle"
-            color="dark"
+            color="gray"
+            size={32}
             aria-label={t("Table of contents")}
             {...tocTriggerProps}
           >
-            <IconList size={20} stroke={2} />
+            <IconList size={19} stroke={1.8} />
           </ActionIcon>
         </Tooltip>
       )}
@@ -254,10 +256,11 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         <Menu.Target>
           <ActionIcon
             variant="subtle"
-            color="dark"
+            color="gray"
+            size={32}
             aria-label={t("Page actions")}
           >
-            <IconDots size={20} />
+            <IconDots size={19} />
           </ActionIcon>
         </Menu.Target>
 

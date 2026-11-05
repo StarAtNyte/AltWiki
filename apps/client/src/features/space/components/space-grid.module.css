@@ -1,47 +1,116 @@
+/* Space cards: 104px, avatar + chevron on top, name + members below.
+   5 / 3 / 2 / 1 columns. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: rem(12px);
+
+  @media (max-width: $mantine-breakpoint-lg) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .card {
-    background-color: var(--mantine-color-body);
-    @mixin hover {
-        box-shadow: var(--mantine-shadow-xs);
-        transform: scale(1.02);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: rem(104px);
+  min-width: 0;
+  padding: rem(16px);
+  border-radius: rem(14px);
+  background: var(--app-tile-bg);
+  box-shadow: 0 0 0 1px var(--app-hair);
+  text-decoration: none;
+  color: var(--app-ink);
+  transition: background-color var(--app-transition);
+
+  @mixin hover {
+    background: var(--app-tile-hover);
+
+    .chevron {
+      color: var(--app-ink);
     }
+  }
 
-    &:focus-visible {
-        outline: 2px solid var(--mantine-primary-color-filled);
-        outline-offset: 2px;
-    }
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    height: auto;
+    gap: rem(12px);
+  }
 }
 
-.cardSection {
-    position: relative;
-    background: light-dark(var(--mantine-color-gray-1), var(--mantine-color-dark-6));
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: rem(8px);
 }
 
-.starButton {
-    position: absolute;
-    top: 4px;
-    right: 4px;
-    opacity: 0;
-    transition: opacity 150ms ease;
+.chevron {
+  flex-shrink: 0;
+  color: var(--app-muted);
+  transition: color var(--app-transition);
 }
 
-.starButton[data-favorited="true"] {
-    opacity: 1;
-}
-
-.card:hover .starButton {
-    opacity: 1;
+.body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .title {
-    font-family:
-            Greycliff CF,
-            var(--mantine-font-family);
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
+  font-size: rem(14px);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.icon {
-    margin-right: rem(5px);
-    color: light-dark(var(--mantine-color-gray-5), var(--mantine-color-dark-2));
+.meta {
+  font-size: rem(12.5px);
+  line-height: 1.4;
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  border: 1px dashed var(--app-hair);
+  border-radius: rem(14px);
+  padding: var(--mantine-spacing-xl);
+  text-align: center;
+}
+
+/* Favourite star: shown on hover / focus, always when starred. */
+.cardActions {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(2px);
+}
+
+.starButton {
+  display: inline-flex;
+  opacity: 0;
+  transition: opacity var(--app-transition-fast);
+
+  &[data-favorited] {
+    opacity: 1;
+  }
+}
+
+.card:hover .starButton,
+.card:focus-within .starButton {
+  opacity: 1;
 }

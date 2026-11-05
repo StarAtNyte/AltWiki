@@ -10,4 +10,6 @@ export type SpaceTreeNode = {
   isBase?: boolean;
   canEdit?: boolean;
   children: SpaceTreeNode[];
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
 };

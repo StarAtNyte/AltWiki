@@ -1,29 +1,166 @@
-.header, .navbar, .aside {
-  background-color: light-dark(#f6f7f9, var(--mantine-color-dark-8));
+/*
+ * Shell over the background photo (alt layout: rail / sidebar / aside run full
+ * height, the header sits between them).
+ *
+ * The header is transparent over the single fixed backdrop (styles/glass.css)
+ * and only turns into frosted glass once content scrolls beneath it. The
+ * mobile drawer paints its own copy of the photo so it hides the page.
+ */
+
+.header {
+  background: transparent !important;
+  border-bottom: 1px solid transparent;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+
+  &[data-scrolled] {
+    background: var(--app-glass-soft-bg) !important;
+    backdrop-filter: var(--app-blur);
+    -webkit-backdrop-filter: var(--app-blur);
+    border-bottom-color: var(--app-glass-border);
+  }
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    /* Stay above the drawer so the burger can close it. */
+    z-index: 202;
+  }
 }
 
-.navbar, .aside {
+.navbar {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  /* Desktop: the photo shows through; only the floating panels are painted. */
+  background: transparent !important;
+
+  &[data-resizing] {
+    cursor: col-resize;
+  }
+
   @media (max-width: $mantine-breakpoint-sm) {
-    width: 350px;
+    /* Mobile drawer opens below the header and needs its own backdrop. */
+    top: var(--app-shell-header-height) !important;
+    height: calc(100dvh - var(--app-shell-header-height)) !important;
+    width: min(calc(var(--app-rail-outer) + 312px), 100vw);
+    z-index: 201;
+    box-shadow: var(--mantine-shadow-lg);
+    background-color: var(--app-plain-bg) !important;
+    background-image:
+      linear-gradient(
+        rgb(var(--app-wash-rgb) / var(--app-bg-dim, 0)),
+        rgb(var(--app-wash-rgb) / var(--app-bg-dim, 0))
+      ),
+      linear-gradient(
+        rgb(var(--app-wash-rgb) / calc(var(--app-wash-alpha) * var(--app-bg-wash, 1))),
+        rgb(var(--app-wash-rgb) / calc(var(--app-wash-alpha) * var(--app-bg-wash, 1)))
+      ),
+      var(--app-bg-image, none) !important;
+    background-size: cover !important;
+    background-position: center 40% !important;
+
+    &[data-rail-only] {
+      width: var(--app-rail-outer);
+    }
+  }
+}
+
+/* Floating glass sidebar (space tree / settings nav), right of the rail. */
+.context {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  margin: rem(12px) rem(12px) rem(12px) 0;
+  border-radius: rem(18px);
+  background: var(--app-glass-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-glass-shadow);
+  overflow: hidden;
+
+  @media (min-width: $mantine-breakpoint-sm) {
+    &[data-hidden-desktop] {
+      display: none;
+    }
+  }
+
+  &[data-empty] {
+    display: none;
+  }
+}
+
+/*
+ * Solid reading surface on page / settings / list routes: a fixed card
+ * between the sidebar and the aside, behind the (in-flow) content.
+ */
+.docCanvas {
+  position: fixed;
+  z-index: -1;
+  top: var(--app-shell-header-offset, 0rem);
+  bottom: 0;
+  inset-inline-start: var(--app-shell-navbar-offset, 0rem);
+  inset-inline-end: calc(var(--app-shell-aside-offset, 0rem) + rem(12px));
+  border-radius: rem(18px) rem(18px) 0 0;
+  background: var(--app-doc-bg);
+  box-shadow: var(--app-glass-shadow);
+  pointer-events: none;
+  transition: inset 180ms cubic-bezier(0.2, 0, 0, 1);
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    inset-inline: 0;
+    border-radius: rem(14px) rem(14px) 0 0;
+  }
+
+  @media print {
+    display: none;
   }
 }
 
 .aside {
+  background: transparent !important;
+
   @media (max-width: $mantine-breakpoint-sm) {
-    margin-top: 45px;
+    top: var(--app-shell-header-height) !important;
+    height: calc(100dvh - var(--app-shell-header-height)) !important;
+    width: min(350px, 100vw);
+  }
+}
+
+.asideInner {
+  flex: 1;
+  min-height: 0;
+  margin: rem(12px) rem(12px) rem(12px) 0;
+  border-radius: rem(18px);
+  background: var(--app-glass-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-glass-shadow);
+  overflow: hidden;
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    margin: 0;
+    border-radius: 0;
+    background: var(--app-doc-bg);
   }
 }
 
 .resizeHandle {
-  width: 3px;
+  width: 6px;
   cursor: col-resize;
   position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
+  right: -3px;
+  top: rem(18px);
+  bottom: rem(18px);
+  z-index: 2;
+  transition: background-color var(--app-transition);
 
-  &:hover, &:active {
-    width: 5px;
-    background: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-5))
+  &:hover,
+  &:active {
+    background: var(--app-accent);
+    opacity: 0.45;
   }
 }

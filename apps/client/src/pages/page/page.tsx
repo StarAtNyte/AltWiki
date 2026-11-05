@@ -21,6 +21,8 @@ import { useHasFeature } from "@/ee/hooks/use-feature";
 import { Feature } from "@/ee/features";
 import { getPageTitle } from "@/features/page/page.utils";
 import { DocumentTitle } from "@/components/ui/document-title.tsx";
+import SubpagesSection from "@/features/page/components/subpages-section/subpages-section.tsx";
+
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -74,6 +76,14 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
   const canComment =
     canEdit ||
     (space?.settings?.comments?.allowViewerComments === true);
+
+  // Mount the editor one commit after the page itself. This route is lazy, so
+  // its first render runs in React's interruptible retry lane, where
+  // creating the TipTap editor during render (immediatelyRender) keeps
+  // restarting the render and the page never appears. A state update from an
+  // effect renders synchronously.
+  const [editorMounted, setEditorMounted] = React.useState(false);
+  React.useEffect(() => setEditorMounted(true), []);
 
   if (isLoading) {
     return <></>;
@@ -178,18 +188,27 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
 
         <MemoizedPageHeader readOnly={!canEdit} />
 
-        <MemoizedFullEditor
-          key={page.id}
+        {editorMounted && (
+          <MemoizedFullEditor
+            key={page.id}
+            pageId={page.id}
+            title={page.title}
+            content={page.content}
+            slugId={page.slugId}
+            spaceId={page.spaceId}
+            spaceSlug={page?.space?.slug}
+            editable={canEdit}
+            creator={page.creator}
+            contributors={page.contributors}
+            canComment={canComment}
+          />
+        )}
+        <SubpagesSection
+          key={`subpages-${page.id}`}
           pageId={page.id}
-          title={page.title}
-          content={page.content}
-          slugId={page.slugId}
           spaceId={page.spaceId}
           spaceSlug={page?.space?.slug}
-          editable={canEdit}
-          creator={page.creator}
-          contributors={page.contributors}
-          canComment={canComment}
+          content={page.content}
         />
         <MemoizedHistoryModal pageId={page.id} />
       </div>

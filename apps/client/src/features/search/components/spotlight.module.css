@@ -1,0 +1,185 @@
+/*
+ * Search spotlight in the alpine glass style: frosted 18px panel, pill input,
+ * rows that mirror the home "Recent edits" list, and a soft dim/blur backdrop.
+ * Shared by the app search and the public share search.
+ */
+
+.overlay {
+  background: light-dark(rgba(244, 242, 238, 0.35), rgba(10, 12, 18, 0.45)) !important;
+  backdrop-filter: var(--app-overlay-blur);
+  -webkit-backdrop-filter: var(--app-overlay-blur);
+}
+
+.content {
+  border-radius: rem(18px) !important;
+  background: light-dark(rgba(255, 255, 255, 0.88), rgba(22, 26, 35, 0.86)) !important;
+  /* No blur of its own: it already sits on the blurred overlay. */
+  border: 1px solid light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 0 0 1px light-dark(rgba(15, 23, 42, 0.06), rgba(0, 0, 0, 0.3)),
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 16px 40px light-dark(rgba(15, 23, 42, 0.1), rgba(0, 0, 0, 0.35));
+}
+
+.body {
+  background: transparent;
+}
+
+/* Pill input, same language as the header search pill. */
+.search {
+  height: rem(44px) !important;
+  min-height: rem(44px) !important;
+  border-radius: 999px !important;
+  font-size: rem(14.5px) !important;
+  color: var(--app-ink);
+  background: light-dark(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.05)) !important;
+  border: 1px solid var(--app-hair) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+
+  &::placeholder {
+    color: var(--app-muted);
+  }
+
+  &:focus {
+    border-color: var(--app-focus-ring) !important;
+  }
+}
+
+.actionsList {
+  border-top: 1px solid var(--app-hair) !important;
+  padding: rem(6px) rem(8px) rem(8px);
+}
+
+.actionsGroup {
+  margin-top: rem(4px);
+
+  &::before {
+    padding: rem(8px) rem(12px) rem(4px);
+    font-size: rem(12.5px);
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--app-muted);
+  }
+}
+
+/* Row: icon | title + tag / meta. Keyboard highlight = white tile + hairline. */
+.action {
+  padding: rem(9px) rem(12px);
+  border-radius: rem(10px);
+  color: var(--app-ink);
+  border: 1px solid transparent;
+  transition:
+    background-color var(--app-transition),
+    border-color var(--app-transition);
+
+  @mixin hover {
+    &:where(:not([data-selected])) {
+      background-color: var(--app-row-hover) !important;
+    }
+  }
+
+  &[data-selected] {
+    background-color: light-dark(rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.07)) !important;
+    border-color: var(--app-hair);
+    box-shadow: 0 1px 2px light-dark(rgba(15, 23, 42, 0.05), rgba(0, 0, 0, 0.2));
+    color: var(--app-ink) !important;
+    --action-description-color: var(--app-muted);
+    --action-description-opacity: 1;
+  }
+}
+
+.empty {
+  padding: rem(28px) rem(12px);
+  font-size: rem(13.5px);
+  color: var(--app-muted);
+}
+
+/* Row content (used by result item components). */
+.row {
+  display: grid;
+  grid-template-columns: rem(20px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: rem(12px);
+  width: 100%;
+  min-width: 0;
+}
+
+.rowIcon {
+  display: inline-flex;
+  justify-content: center;
+  font-size: rem(15px);
+  line-height: 1;
+  color: var(--app-muted);
+}
+
+.rowBody {
+  display: flex;
+  flex-direction: column;
+  gap: rem(2px);
+  min-width: 0;
+}
+
+.rowLine {
+  display: flex;
+  align-items: center;
+  gap: rem(10px);
+  min-width: 0;
+}
+
+.rowTitle {
+  min-width: 0;
+  font-size: rem(14px);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag {
+  flex-shrink: 0;
+  max-width: 45%;
+  padding: rem(2px) rem(8px);
+  border-radius: 999px;
+  font-size: rem(11.5px);
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: rem(12px);
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.meta {
+  font-size: rem(12.5px);
+  line-height: 1.45;
+  color: var(--app-muted);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+
+  mark {
+    background: light-dark(rgba(160, 122, 59, 0.18), rgba(216, 195, 154, 0.2));
+    color: inherit;
+    border-radius: rem(3px);
+    padding: 0 rem(1px);
+  }
+}
+
+.header {
+  padding: rem(12px) rem(12px) rem(4px);
+}
+
+.filters {
+  padding: 0 rem(12px) rem(4px);
+}

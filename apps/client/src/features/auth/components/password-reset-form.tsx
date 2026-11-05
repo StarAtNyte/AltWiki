@@ -1,3 +1,4 @@
+import { AuthBrand } from "@/features/auth/components/auth-layout.tsx";
 import { z } from "zod/v4";
 import { useForm } from "@mantine/form";
 import { zod4Resolver } from "mantine-form-zod-resolver";
@@ -42,6 +43,7 @@ export function PasswordResetForm({ resetToken }: PasswordResetFormProps) {
     <AuthLayout>
     <Container size={420} className={classes.container}>
       <Box p="xl" className={classes.containerBox}>
+        <AuthBrand />
         <Title order={2} ta="center" fw={500} mb="md">
           {t("Password reset")}
         </Title>

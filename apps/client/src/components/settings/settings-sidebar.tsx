@@ -40,7 +40,6 @@ import {
   prefetchAuditLogs,
   prefetchVerifiedPages,
 } from "@/components/settings/settings-queries.tsx";
-import AppVersion from "@/components/settings/app-version.tsx";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { useSettingsNavigation } from "@/hooks/use-settings-navigation";
@@ -54,6 +53,8 @@ type DataItem = {
   role?: "admin" | "owner";
   env?: "cloud" | "selfhosted";
   requiresInstalledIntegration?: boolean;
+  // AltWiki: hidden entirely (not just disabled) when no paid licence.
+  requiresEE?: boolean;
 };
 
 type DataGroup = {
@@ -125,6 +126,7 @@ const groupedData: DataGroup[] = [
         icon: IconSparkles,
         path: "/settings/ai",
         role: "admin",
+        requiresEE: true,
       },
       {
         label: "Audit logs & SIEM",
@@ -149,6 +151,7 @@ const groupedData: DataGroup[] = [
         label: "License & Edition",
         icon: IconKey,
         path: "/settings/license",
+        requiresEE: true,
       },
     ],
   },
@@ -174,7 +177,16 @@ export default function SettingsSidebar() {
   const hasFeature = (f: string) =>
     entitlements?.features?.includes(f) ?? false;
 
+  // AltWiki: the server ships no enterprise module, so EE-backed entries are
+  // hidden (not shown disabled) unless the workspace is cloud or has a paid
+  // licence tier (reversible gate).
+  const eeAvailable =
+    isCloud() || (entitlements != null && entitlements.tier !== "free");
+
   const canShowItem = (item: DataItem) => {
+    if (!eeAvailable && (item.requiresEE || isItemDisabled(item))) {
+      return false;
+    }
     if (item.env === "cloud" && !isCloud()) return false;
     if (item.env === "selfhosted" && isCloud()) return false;
     if (item.role === "admin" && !isAdmin) return false;
@@ -191,7 +203,7 @@ export default function SettingsSidebar() {
   };
 
   const menuItems = groupedData.map((group) => {
-    if (group.heading === "System" && (!isAdmin || isCloud())) {
+    if (group.heading === "System" && (!isAdmin || isCloud() || !eeAvailable)) {
       return null;
     }
 
@@ -320,7 +332,6 @@ export default function SettingsSidebar() {
 
       <ScrollArea w="100%">{menuItems}</ScrollArea>
 
-      {!isCloud() && <AppVersion />}
 
       {isCloud() && (
         <div className={classes.text}>
@@ -328,9 +339,9 @@ export default function SettingsSidebar() {
             size="sm"
             c="dimmed"
             component="a"
-            href="mailto:help@docmost.com"
+            href="mailto:help@altwiki.com"
           >
-            help@docmost.com
+            help@altwiki.com
           </Text>
         </div>
       )}

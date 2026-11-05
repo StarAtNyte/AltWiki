@@ -4,7 +4,8 @@ import GlobalAppShell from "@/components/layouts/global/global-app-shell.tsx";
 import { PosthogUser } from "@/ee/components/posthog-user.tsx";
 import { isCloud } from "@/lib/config.ts";
 import { SearchSpotlight } from "@/features/search/components/search-spotlight.tsx";
-import React from "react";
+import React, { Suspense } from "react";
+import { RouteFallback } from "@/components/layouts/global/route-fallback.tsx";
 import { useGetSpaceBySlugQuery } from "@/features/space/queries/space-query.ts";
 import { AppErrorBoundary } from "@/components/ui/app-error-boundary.tsx";
 
@@ -15,8 +16,11 @@ export default function Layout() {
   return (
     <UserProvider>
       <GlobalAppShell>
+        {/* Lazy routes suspend here, inside the shell, so it never unmounts. */}
         <AppErrorBoundary>
-          <Outlet />
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </AppErrorBoundary>
       </GlobalAppShell>
       {isCloud() && <PosthogUser />}

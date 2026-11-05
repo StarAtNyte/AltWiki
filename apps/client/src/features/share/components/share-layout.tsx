@@ -1,6 +1,6 @@
 import "@fontsource-variable/inter";
 import "@/styles/public-typography.css";
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { Outlet, useParams } from "react-router-dom";
 import { useSetAtom } from "jotai";
 import { useGetSharedPageTreeQuery } from "@/features/share/queries/share-query.ts";
@@ -15,6 +15,7 @@ import { useDocsAccent } from "@/features/public-space/theme/docs-theme.ts";
 import { buildSharedPageUrl } from "@/features/page/page.utils.ts";
 import { ShareSearchSpotlight } from "@/features/search/components/share-search-spotlight.tsx";
 import { shareSearchSpotlight } from "@/features/search/constants";
+import { RouteFallback } from "@/components/layouts/global/route-fallback.tsx";
 
 export default function ShareLayout() {
   const { shareId } = useParams();
@@ -61,7 +62,9 @@ export default function ShareLayout() {
         shareId ? <ShareSearchSpotlight shareId={shareId} /> : undefined
       }
     >
-      <Outlet />
+      <Suspense fallback={<RouteFallback />}>
+        <Outlet />
+      </Suspense>
     </DocsShell>
   );
 }

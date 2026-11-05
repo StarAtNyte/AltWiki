@@ -1,14 +1,19 @@
-import { Group, Center, Text, Button } from "@mantine/core";
+import { Button } from "@mantine/core";
 import { Spotlight } from "@mantine/spotlight";
-import { IconLetterCase, IconSearch } from "@tabler/icons-react";
+import { IconFileText, IconLetterCase, IconSearch } from "@tabler/icons-react";
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useDebouncedValue } from "@mantine/hooks";
 import { usePublicSpaceSearchQuery } from "@/features/search/queries/search-query";
 import { buildPublicSpaceUrl } from "@/features/page/page.utils.ts";
-import { getPageIcon } from "@/lib";
 import { useTranslation } from "react-i18next";
 import { publicSpaceSearchSpotlightStore } from "@/features/search/constants.ts";
+import clsx from "clsx";
+import filterClasses from "./search-spotlight-filters.module.css";
+import {
+  spotlightClassNames,
+  spotlightClasses as classes,
+} from "./spotlight-classes.ts";
 import DOMPurify from "dompurify";
 
 interface PublicSpaceSearchSpotlightProps {
@@ -42,16 +47,17 @@ export function PublicSpaceSearchSpotlight({
       })}
       style={{ userSelect: "none" }}
     >
-      <Group wrap="nowrap" w="100%">
-        <Center>{getPageIcon(page?.icon)}</Center>
+      <div className={classes.row}>
+        <span className={classes.rowIcon} aria-hidden>
+          {page?.icon || <IconFileText size={18} stroke={1.5} />}
+        </span>
 
-        <div style={{ flex: 1 }}>
-          <Text>{page.title}</Text>
+        <div className={classes.rowBody}>
+          <span className={classes.rowTitle}>{page.title}</span>
 
           {page?.highlight && (
-            <Text
-              opacity={0.6}
-              size="xs"
+            <div
+              className={classes.meta}
               dangerouslySetInnerHTML={{
                 __html: DOMPurify.sanitize(page.highlight, {
                   ALLOWED_TAGS: ["mark", "em", "strong", "b"],
@@ -61,7 +67,7 @@ export function PublicSpaceSearchSpotlight({
             />
           )}
         </div>
-      </Group>
+      </div>
     </Spotlight.Action>
   ));
 
@@ -72,29 +78,35 @@ export function PublicSpaceSearchSpotlight({
         query={query}
         onQueryChange={setQuery}
         scrollable
-        overlayProps={{
-          backgroundOpacity: 0.55,
-        }}
+        radius={18}
+        classNames={spotlightClassNames}
+        overlayProps={{ backgroundOpacity: 0 }}
       >
-        <Spotlight.Search
-          placeholder={t("Search...")}
-          aria-label={t("Search")}
-          leftSection={<IconSearch size={20} stroke={1.5} />}
-        />
-        <Group px="sm" py={6}>
+        <div className={classes.header}>
+          <Spotlight.Search
+            placeholder={t("Search...")}
+            aria-label={t("Search")}
+            leftSection={<IconSearch size={18} stroke={1.5} />}
+            leftSectionWidth={44}
+          />
+        </div>
+        <div className={classes.filters}>
           <Button
-            variant={titleOnly ? "light" : "subtle"}
-            color={titleOnly ? undefined : "gray"}
-            size="compact-sm"
-            radius="xl"
+            variant="subtle"
+            color="gray"
+            size="sm"
             fw={500}
-            leftSection={<IconLetterCase size={15} />}
+            className={clsx(
+              filterClasses.filterButton,
+              titleOnly && filterClasses.filterButtonActive,
+            )}
+            leftSection={<IconLetterCase size={15} stroke={1.5} />}
             aria-pressed={titleOnly}
             onClick={() => setTitleOnly((value) => !value)}
           >
             {t("Title only")}
           </Button>
-        </Group>
+        </div>
         <Spotlight.ActionsList>
           {query.length === 0 && pages.length === 0 && (
             <Spotlight.Empty>{t("Start typing to search...")}</Spotlight.Empty>
@@ -104,7 +116,11 @@ export function PublicSpaceSearchSpotlight({
             <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
           )}
 
-          {pages.length > 0 && pages}
+          {pages.length > 0 && (
+            <Spotlight.ActionsGroup label={t("Pages")}>
+              {pages}
+            </Spotlight.ActionsGroup>
+          )}
         </Spotlight.ActionsList>
       </Spotlight.Root>
     </>

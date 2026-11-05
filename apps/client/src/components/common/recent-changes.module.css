@@ -1,0 +1,135 @@
+/* Recent edits rows: doc icon | title + space tag | clock + relative time.
+   Hairline separators are inset 12px; rows get a soft hover tile. */
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list > li + li::before {
+  content: "";
+  display: block;
+  height: 1px;
+  margin-inline: rem(12px);
+  background: var(--app-hair);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: rem(20px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: rem(12px);
+  padding: rem(11px) rem(12px);
+  border-radius: rem(10px);
+  color: var(--app-ink);
+  text-decoration: none;
+  transition: background-color var(--app-transition);
+
+  @mixin hover {
+    background-color: var(--app-row-hover);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: -2px;
+  }
+}
+
+.icon {
+  display: inline-flex;
+  justify-content: center;
+  font-size: rem(15px);
+  line-height: 1;
+  color: var(--app-muted);
+}
+
+.body {
+  display: flex;
+  align-items: center;
+  gap: rem(10px);
+  min-width: 0;
+}
+
+.title {
+  min-width: 0;
+  font-size: rem(14px);
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tag {
+  flex-shrink: 0;
+  max-width: 45%;
+  padding: rem(2px) rem(8px);
+  border-radius: 999px;
+  font-size: rem(11.5px);
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.author {
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: rem(12.5px);
+  color: var(--app-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.time {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(6px);
+  font-size: rem(12.5px);
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: rem(12px);
+  padding: rem(14px) rem(12px);
+
+  > :first-child {
+    flex-shrink: 0;
+  }
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: rem(6px);
+  padding: rem(36px) var(--mantine-spacing-md);
+}
+
+.emptyIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(36px);
+  height: rem(36px);
+  margin-bottom: rem(4px);
+  border-radius: rem(10px);
+  box-shadow: 0 0 0 1px var(--app-hair);
+  color: var(--app-muted);
+}
+
+@media (max-width: $mantine-breakpoint-xs) {
+  .row {
+    grid-template-columns: rem(20px) minmax(0, 1fr);
+    row-gap: rem(2px);
+  }
+
+  .time {
+    grid-column: 2;
+  }
+}

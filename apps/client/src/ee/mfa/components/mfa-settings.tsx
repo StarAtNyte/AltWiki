@@ -21,12 +21,14 @@ export function MfaSettings() {
   const canUseMfa = useHasFeature(Feature.MFA);
   const upgradeLabel = useUpgradeLabel();
 
+  // No EE backend without cloud/license: skip the /mfa/status call (404).
   const { data: mfaStatus, isLoading } = useQuery({
     queryKey: ["mfa-status"],
     queryFn: getMfaStatus,
+    enabled: !!canUseMfa,
   });
 
-  if (isLoading || !mfaStatus) {
+  if (!canUseMfa || isLoading || !mfaStatus) {
     return null;
   }
 

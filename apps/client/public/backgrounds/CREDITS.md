@@ -1,0 +1,2 @@
+- ridge.jpg, lake.jpg, terraces.jpg: generated for AltWiki with OpenAI image generation via Codex CLI (2026-11-05).
+- trail.jpg: "Himalaya sunrise", Wikimedia Commons, CC0 1.0 (public domain dedication).

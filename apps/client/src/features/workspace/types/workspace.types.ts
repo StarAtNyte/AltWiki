@@ -46,6 +46,7 @@ export interface IWorkspaceSettings {
   spaces?: IWorkspaceSpaceSettings;
   publicSpaces?: IWorkspacePublicSpacesSettings;
   defaultPageEditMode?: string;
+  integrations?: IWorkspaceIntegrationSettings;
 }
 
 export interface IWorkspaceApiSettings {
@@ -77,6 +78,10 @@ export interface IWorkspaceSpaceSettings {
 export interface IWorkspacePublicSpacesSettings {
   enabled?: boolean;
   directory?: boolean;
+}
+
+export interface IWorkspaceIntegrationSettings {
+  geminiApiKey?: string;
 }
 
 export interface ICreateInvite {

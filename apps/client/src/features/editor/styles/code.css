@@ -1,6 +1,7 @@
 .ProseMirror {
   .codeBlock {
     padding: 4px;
+    border: 1px solid var(--app-border-subtle, transparent);
     border-radius: var(--mantine-radius-default);
     background-color: light-dark(var(--mantine-color-gray-0),  var(--mantine-color-dark-8));
     }
@@ -10,6 +11,7 @@
     margin: 4px;
     font-family: "JetBrainsMono", var(--mantine-font-family-monospace);
     border-radius: var(--mantine-radius-default);
+    line-height: 1.6;
     tab-size: 4;
 
     @mixin light {

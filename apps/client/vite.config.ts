@@ -42,11 +42,30 @@ export default defineConfig(({ mode }) => {
     build: {
       rolldownOptions: {
         output: {
+          // Long-lived vendor chunks: they change rarely, so browsers keep
+          // them cached across app deploys. The editor stack is only fetched
+          // by the lazily loaded page / share / history routes.
           advancedChunks: {
             groups: [
               {
+                name: "vendor-react",
+                test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom)[\\/]/,
+                priority: 40,
+              },
+              {
                 name: "vendor-mantine",
-                test: /[\\/]node_modules[\\/]@mantine[\\/]/,
+                test: /[\\/]node_modules[\\/](@mantine|@floating-ui)[\\/]/,
+                priority: 30,
+              },
+              {
+                name: "vendor-editor",
+                test: /[\\/]node_modules[\\/](@tiptap|prosemirror-[^\\/]+|orderedmap|rope-sequence|w3c-keyname)[\\/]/,
+                priority: 20,
+              },
+              {
+                name: "vendor-collab",
+                test: /[\\/]node_modules[\\/](yjs|y-protocols|y-prosemirror|y-indexeddb|lib0|@hocuspocus)[\\/]/,
+                priority: 10,
               },
             ],
           },

@@ -1,26 +1,38 @@
 .filtersContainer {
   display: flex;
+  align-items: center;
   gap: 8px;
   overflow-x: auto;
-  padding: 8px 0;
+  padding: 6px 0 8px;
   scrollbar-width: thin;
 }
 
+/* Quiet pill chips (glass). */
 .filterButton {
   white-space: nowrap;
   flex-shrink: 0;
-  font-size: 13px;
-  height: 32px;
+  height: 30px;
   padding: 0 12px;
-  color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-6));
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-2) !important;
+  background: light-dark(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.04)) !important;
+  border: 1px solid var(--app-hair) !important;
+  transition: background-color var(--app-transition);
+
   &:hover {
-    color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-gray-6));
+    color: var(--app-ink) !important;
+    background: light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.08)) !important;
   }
 }
 
 .filterButtonActive {
-  color: var(--mantine-color-blue-light-color);
+  color: var(--app-accent-text) !important;
+  background: var(--app-accent-soft) !important;
+  border-color: transparent !important;
+
   &:hover {
-    color: var(--mantine-color-blue-light-color);
+    color: var(--app-accent-text) !important;
   }
 }

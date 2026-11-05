@@ -1,0 +1,21 @@
+.fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: rem(160px);
+  padding: rem(48px) 0;
+  opacity: 0;
+  animation: route-fallback-in 160ms ease-out 250ms forwards;
+}
+
+@keyframes route-fallback-in {
+  to {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fallback {
+    animation-duration: 0ms;
+  }
+}

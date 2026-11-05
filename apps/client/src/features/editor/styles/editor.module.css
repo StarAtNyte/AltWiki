@@ -23,3 +23,13 @@
     }
 }
 
+
+/* comfortable reading measure (~70ch) unless the user chose full width */
+.editor:not([data-fluid]) {
+    max-width: 820px;
+}
+
+/* a subpages section follows: drop the bottom gap, the section fills it */
+:global(div:has(> [data-subpages])) > .editor {
+    margin-bottom: 8px;
+}

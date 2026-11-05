@@ -1,4 +1,6 @@
 import "@mantine/core/styles.css";
+import "./styles/fonts.css";
+import "./styles/glass.css";
 import "@mantine/spotlight/styles.css";
 import "@mantine/notifications/styles.css";
 import '@mantine/dates/styles.css';
@@ -52,7 +54,11 @@ const root = (container as any).__reactRoot ??= ReactDOM.createRoot(container);
 
 root.render(
   <BrowserRouter>
-    <MantineProvider theme={theme} cssVariablesResolver={mantineCssResolver}>
+    <MantineProvider
+      theme={theme}
+      cssVariablesResolver={mantineCssResolver}
+      defaultColorScheme="light"
+    >
       <ModalsProvider>
         <QueryClientProvider client={queryClient}>
           <Notifications position="bottom-center" limit={3} zIndex={10000} />

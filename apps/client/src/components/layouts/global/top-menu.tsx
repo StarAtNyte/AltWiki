@@ -13,6 +13,7 @@ import {
   IconDeviceDesktop,
   IconLogout,
   IconMoon,
+  IconPhoto,
   IconSettings,
   IconSun,
   IconUser,
@@ -25,7 +26,9 @@ import { useHasFeature } from "@/ee/hooks/use-feature";
 import { Feature } from "@/ee/features";
 import { usePersonalSpaceQuery } from "@/ee/personal-space/queries/personal-space-query";
 import CreatePersonalSpaceModal from "@/ee/personal-space/components/create-personal-space-modal";
-import { useAtom } from "jotai";
+
+import { useAtom, useSetAtom } from "jotai";
+import { backgroundModalAtom } from "@/features/background/background.ts";
 import { currentUserAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { Link } from "react-router-dom";
 import APP_ROUTE from "@/lib/app-route.ts";
@@ -39,6 +42,7 @@ export default function TopMenu() {
   const [currentUser] = useAtom(currentUserAtom);
   const { logout } = useAuth();
   const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const openBackground = useSetAtom(backgroundModalAtom);
 
   const user = currentUser?.user;
   const workspace = currentUser?.workspace;
@@ -60,18 +64,19 @@ export default function TopMenu() {
     <Menu width={250} position="bottom-end" withArrow shadow={"lg"}>
       <Menu.Target>
         <UnstyledButton>
-          <Group gap={7} wrap={"nowrap"}>
+          <Group gap={10} wrap={"nowrap"}>
             <CustomAvatar
               avatarUrl={workspace?.logo}
               name={workspace?.name}
               variant="filled"
-              size="sm"
+              color="brand"
+              size={32}
               type={AvatarIconType.WORKSPACE_ICON}
             />
-            <Text fw={500} size="sm" lh={1} mr={3} lineClamp={1}>
+            <Text fw={500} fz={14} lh={1.2} lineClamp={1} c="var(--app-ink)" visibleFrom="xs">
               {workspace?.name}
             </Text>
-            <IconChevronDown size={16} />
+            <IconChevronDown size={16} color="var(--app-muted)" />
           </Group>
         </UnstyledButton>
       </Menu.Target>
@@ -150,6 +155,12 @@ export default function TopMenu() {
             </Menu.Item>
           )
         )}
+        <Menu.Item
+          onClick={() => openBackground(true)}
+          leftSection={<IconPhoto size={16} />}
+        >
+          {t("Background")}
+        </Menu.Item>
 
         <Menu.Sub>
           <Menu.Sub.Target>

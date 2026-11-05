@@ -1,7 +1,7 @@
 import { Spotlight } from "@mantine/spotlight";
 import { IconSearch, IconSparkles } from "@tabler/icons-react";
 import { Group, Button, VisuallyHidden, Text } from "@mantine/core";
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { lazy, Suspense, useState, useMemo, useEffect, useCallback } from "react";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useTranslation } from "react-i18next";
 import { notifications } from "@mantine/notifications";
@@ -10,13 +10,22 @@ import { SearchSpotlightFilters } from "./search-spotlight-filters.tsx";
 import { useUnifiedSearch } from "../hooks/use-unified-search.ts";
 import { useAiSearch } from "../../../ee/ai/hooks/use-ai-search.ts";
 import { SearchResultItem } from "./search-result-item.tsx";
-import { AiSearchResult } from "../../../ee/ai/components/ai-search-result.tsx";
+// Pulls in the markdown renderer; only needed once an AI answer arrives.
+const AiSearchResult = lazy(() =>
+  import("../../../ee/ai/components/ai-search-result.tsx").then((m) => ({
+    default: m.AiSearchResult,
+  })),
+);
 import { useHasFeature } from "@/ee/hooks/use-feature";
 import { Feature } from "@/ee/features";
 import { useAtomValue } from "jotai";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { hintVectorCache } from "@/ee/ai/services/ai-search-service.ts";
 import { getAiVectorDriver } from "@/lib/config.ts";
+import {
+  spotlightClassNames,
+  spotlightClasses as classes,
+} from "./spotlight-classes.ts";
 
 interface SearchSpotlightProps {
   spaceId?: string;
@@ -157,15 +166,16 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
         query={query}
         onQueryChange={setQuery}
         scrollable
-        overlayProps={{
-          backgroundOpacity: 0.55,
-        }}
+        radius={18}
+        classNames={spotlightClassNames}
+        overlayProps={{ backgroundOpacity: 0 }}
       >
-        <Group gap="xs" px="sm" pt="sm" pb="xs">
+        <Group gap="xs" className={classes.header}>
           <Spotlight.Search
             placeholder={isAiMode ? t("Ask a question...") : t("Search...")}
             aria-label={isAiMode ? t("Ask a question...") : t("Search")}
-            leftSection={<IconSearch size={20} stroke={1.5} />}
+            leftSection={<IconSearch size={18} stroke={1.5} />}
+            leftSectionWidth={44}
             style={{ flex: 1 }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && isAiMode && query.trim() && !isAiLoading) {
@@ -187,11 +197,7 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
           )}
         </Group>
 
-        <div
-          style={{
-            padding: "4px 16px",
-          }}
-        >
+        <div className={classes.filters}>
           <SearchSpotlightFilters
             onFiltersChange={handleFiltersChange}
             onAskClick={handleAskClick}
@@ -219,12 +225,14 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
                 <Spotlight.Empty>{t("Ask a question...")}</Spotlight.Empty>
               )}
               {query.length > 0 && (isAiLoading || aiSearchResult || streamingAnswer) && (
-                <AiSearchResult
-                  result={aiSearchResult}
-                  isLoading={isAiLoading}
-                  streamingAnswer={streamingAnswer}
-                  streamingSources={streamingSources}
-                />
+                <Suspense fallback={null}>
+                  <AiSearchResult
+                    result={aiSearchResult}
+                    isLoading={isAiLoading}
+                    streamingAnswer={streamingAnswer}
+                    streamingSources={streamingSources}
+                  />
+                </Suspense>
               )}
               {query.length > 0 && !isAiLoading && !aiSearchResult && (
                 <Spotlight.Empty>{t("No answer available")}</Spotlight.Empty>
@@ -243,7 +251,13 @@ export function SearchSpotlight({ spaceId }: SearchSpotlightProps) {
                   <Spotlight.Empty>{t("No results found...")}</Spotlight.Empty>
                 )}
 
-              {resultItems.length > 0 && <>{resultItems}</>}
+              {resultItems.length > 0 && (
+                <Spotlight.ActionsGroup
+                  label={isAttachmentSearch ? t("Attachments") : t("Pages")}
+                >
+                  {resultItems}
+                </Spotlight.ActionsGroup>
+              )}
 
               {(query.length > 0 || isFilterBrowse) &&
                 isFetching &&

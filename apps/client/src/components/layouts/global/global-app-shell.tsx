@@ -17,13 +17,24 @@ const AiChatSidebar = lazyWithPrefetch(
   () => import("@/ee/ai-chat/components/ai-chat-sidebar.tsx"),
 );
 import { AppHeader } from "@/components/layouts/global/app-header.tsx";
-import Aside from "@/components/layouts/global/aside.tsx";
 import classes from "./app-shell.module.css";
 import { useTrialEndAction } from "@/ee/hooks/use-trial-end-action.tsx";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
-import GlobalSidebar from "@/components/layouts/global/global-sidebar.tsx";
 import { ASIDE_PANEL_ID } from "@/hooks/use-toggle-aside.tsx";
 import { MAIN_CONTENT_ID, SkipToMain } from "@/components/ui/skip-to-main.tsx";
+import { SpaceRail } from "@/components/layouts/global/space-rail.tsx";
+import { AppBackdrop } from "@/features/background/components/app-backdrop.tsx";
+import { BackgroundPickerModal } from "@/features/background/components/background-picker.tsx";
+
+// Comments / table of contents / page info / AI chat: only used on page
+// routes, so loaded with the page instead of with the shell.
+const Aside = React.lazy(() => import("@/components/layouts/global/aside.tsx"));
+
+// The floating rail (72px) plus its 12px insets. Keep in sync with
+// --app-rail-outer in theme.ts.
+const RAIL_WIDTH = 96;
+// Right inset of the floating contextual sidebar.
+const CONTEXT_GAP = 12;
 
 export default function GlobalAppShell({
   children,
@@ -39,6 +50,32 @@ export default function GlobalAppShell({
   const [sidebarWidth, setSidebarWidth] = useAtom(sidebarWidthAtom);
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef(null);
+  const headerRef = useRef<HTMLElement>(null);
+
+  // The header is transparent over the fixed photo at rest; once content
+  // scrolls beneath it, it gets a frosted surface. Toggled as a data
+  // attribute (no React re-render per scroll event).
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const el = headerRef.current;
+      if (!el) return;
+      const scrolled = window.scrollY > 4;
+      if (scrolled !== el.hasAttribute("data-scrolled")) {
+        el.toggleAttribute("data-scrolled", scrolled);
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
 
   const startResizing = React.useCallback((mouseDownEvent) => {
     mouseDownEvent.preventDefault();
@@ -54,7 +91,8 @@ export default function GlobalAppShell({
       if (isResizing) {
         const newWidth =
           mouseMoveEvent.clientX -
-          sidebarRef.current.getBoundingClientRect().left;
+          sidebarRef.current.getBoundingClientRect().left -
+          RAIL_WIDTH;
         if (newWidth < 220) {
           setSidebarWidth(220);
           return;
@@ -84,19 +122,47 @@ export default function GlobalAppShell({
   const isSpaceRoute = location.pathname.startsWith("/s/");
   const isAiRoute = location.pathname.startsWith("/ai");
   const isPageRoute = location.pathname.includes("/p/");
-  const showGlobalSidebar = !isSpaceRoute && !isSettingsRoute && !isAiRoute;
+  const isTrashRoute = /^\/s\/[^/]+\/trash/.test(location.pathname);
+  // Space, settings and AI chat routes have a contextual sidebar next to the
+  // rail; every other route (home, spaces, favorites, labels, templates) is
+  // rail only.
+  const hideSidebar = !isSpaceRoute && !isSettingsRoute && !isAiRoute;
+  const isFullBleedRoute =
+    location.pathname.startsWith("/home") || location.pathname === "/spaces";
+  // Reading/working views sit on a solid surface; the photo only shows around
+  // it (and through the glass rail / sidebar).
+  const solidCanvas = isPageRoute || isSettingsRoute || isTrashRoute;
+  // The rail is always visible on desktop; the navbar shrinks to the rail when
+  // the contextual sidebar is hidden or collapsed. On mobile the whole navbar
+  // (rail + sidebar) is the drawer.
+  const showSidebar = !hideSidebar && desktopOpened;
+  // localStorage hands the width back as a string ("300"); coerce and clamp so
+  // arithmetic below can never turn into string concatenation ("300" + 12).
+  const storedWidth = Number(sidebarWidth);
+  const safeSidebarWidth = Number.isFinite(storedWidth)
+    ? Math.min(600, Math.max(220, storedWidth))
+    : 300;
+  const contextWidth = (isSpaceRoute ? safeSidebarWidth : 300) + CONTEXT_GAP;
 
   return (
     <>
-      <SkipToMain />
-      <AppShell
-      header={{ height: 45 }}
+    <SkipToMain />
+    <AppBackdrop />
+    {solidCanvas && <div className={classes.docCanvas} aria-hidden />}
+    <AppShell
+      layout="alt"
+      header={{ height: { base: 56, sm: 96 } }}
+      transitionDuration={isResizing ? 0 : 180}
+      transitionTimingFunction="cubic-bezier(0.2, 0, 0, 1)"
       navbar={{
-        width: isSpaceRoute ? sidebarWidth : 300,
+        width: {
+          base: RAIL_WIDTH + contextWidth,
+          sm: RAIL_WIDTH + (showSidebar ? contextWidth : 0),
+        },
         breakpoint: "sm",
         collapsed: {
           mobile: !mobileOpened,
-          desktop: !desktopOpened,
+          desktop: false,
         },
       }}
       aside={
@@ -106,15 +172,21 @@ export default function GlobalAppShell({
           collapsed: { mobile: !isAsideOpen, desktop: !isAsideOpen },
         }
       }
-      padding="md"
+      padding={isFullBleedRoute ? 0 : "md"}
     >
-      <AppShell.Header px="md" className={classes.header}>
+      <AppShell.Header
+        ref={headerRef}
+        className={classes.header}
+        withBorder={false}
+      >
         <AppHeader />
       </AppShell.Header>
       <AppShell.Navbar
         className={classes.navbar}
         withBorder={false}
         ref={sidebarRef}
+        data-resizing={isResizing || undefined}
+        data-rail-only={hideSidebar || undefined}
         aria-label={
           isSpaceRoute
             ? t("Space navigation")
@@ -125,21 +197,27 @@ export default function GlobalAppShell({
                 : t("Main navigation")
         }
       >
-        {isSpaceRoute && (
-          <div className={classes.resizeHandle} onMouseDown={startResizing} />
-        )}
-        {isSpaceRoute && <SpaceSidebar />}
-        {isSettingsRoute && <SettingsSidebar />}
-        {isAiRoute && (
-          <React.Suspense fallback={null}>
-            <AiChatSidebar />
-          </React.Suspense>
-        )}
-        {showGlobalSidebar && <GlobalSidebar />}
+        <SpaceRail />
+        <div
+          className={classes.context}
+          data-hidden-desktop={!showSidebar || undefined}
+          data-empty={hideSidebar || undefined}
+        >
+          {isSpaceRoute && showSidebar && (
+            <div className={classes.resizeHandle} onMouseDown={startResizing} />
+          )}
+          {isSpaceRoute && <SpaceSidebar />}
+          {isSettingsRoute && <SettingsSidebar />}
+          {isAiRoute && (
+            <React.Suspense fallback={null}>
+              <AiChatSidebar />
+            </React.Suspense>
+          )}
+        </div>
       </AppShell.Navbar>
       <AppShell.Main id={MAIN_CONTENT_ID} tabIndex={-1}>
         {isSettingsRoute ? (
-          <Container size={900} pb={80}>
+          <Container size={900} pt="lg" pb={80}>
             {children}
           </Container>
         ) : (
@@ -152,7 +230,6 @@ export default function GlobalAppShell({
           id={ASIDE_PANEL_ID}
           tabIndex={-1}
           className={classes.aside}
-          p="md"
           withBorder={false}
           aria-label={
             asideTab === "comments"
@@ -166,10 +243,15 @@ export default function GlobalAppShell({
                     : undefined
           }
         >
-          <Aside />
+          <div className={classes.asideInner}>
+            <React.Suspense fallback={null}>
+              <Aside />
+            </React.Suspense>
+          </div>
         </AppShell.Aside>
       )}
     </AppShell>
+    <BackgroundPickerModal />
     </>
   );
 }

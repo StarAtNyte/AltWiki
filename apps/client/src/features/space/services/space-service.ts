@@ -36,6 +36,10 @@ export async function deleteSpace(spaceId: string): Promise<void> {
   await api.post<void>("/spaces/delete", { spaceId });
 }
 
+export async function joinSpace(spaceId: string): Promise<void> {
+  await api.post("/spaces/join", { spaceId });
+}
+
 export async function getSpaceMembers(
   spaceId: string,
   params?: QueryParams,
@@ -77,4 +81,29 @@ export async function exportSpace(data: IExportSpaceParams): Promise<void> {
   }
 
   saveAs(req.data, decodedFileName);
+}
+
+export interface ImportConfluenceSpaceResult {
+  spaceId: string;
+  spaceName: string;
+  pageCount: number;
+}
+
+export async function importConfluenceSpace(
+  file: File,
+): Promise<ImportConfluenceSpaceResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const req = await api.post<ImportConfluenceSpaceResult>(
+    "/spaces/import-confluence",
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    },
+  );
+
+  return req.data;
 }
