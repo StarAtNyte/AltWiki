@@ -412,6 +412,99 @@ export class PageService {
     return result;
   }
 
+  /**
+   * AltWiki: reassign the owner (creator_id) of a page, optionally including
+   * all of its non-deleted descendants. Caller must have authorised the actor.
+   * Does not add the new owner to the space; returns a warning instead when
+   * the new owner has no access to the page's space.
+   */
+  async changeOwner(
+    page: Page,
+    newOwnerId: string,
+    workspaceId: string,
+    includeSubpages: boolean,
+  ): Promise<{
+    pageIds: string[];
+    previousOwnerId: string | null;
+    newOwner: { id: string; name: string; avatarUrl: string | null };
+    warning?: string;
+  }> {
+    const newOwner = await this.db
+      .selectFrom('users')
+      .select(['id', 'name', 'avatarUrl', 'deactivatedAt', 'deletedAt'])
+      .where('id', '=', newOwnerId)
+      .where('workspaceId', '=', workspaceId)
+      .executeTakeFirst();
+
+    if (!newOwner || newOwner.deletedAt) {
+      throw new NotFoundException('User not found');
+    }
+    if (newOwner.deactivatedAt) {
+      throw new BadRequestException('User is deactivated');
+    }
+
+    let pageIds = [page.id];
+    if (includeSubpages) {
+      const tree = await this.pageRepo.getPageAndDescendants(page.id, {
+        includeContent: false,
+      });
+      pageIds = tree
+        .filter((p) => p.workspaceId === workspaceId)
+        .map((p) => p.id);
+      if (!pageIds.includes(page.id)) pageIds.unshift(page.id);
+    }
+
+    await this.pageRepo.updateCreator(pageIds, newOwner.id, workspaceId);
+
+    // Membership: direct, via group, or the space is OPEN to the workspace.
+    const access = await this.db
+      .selectFrom('spaces')
+      .select((eb) => [
+        'spaces.visibility',
+        'spaces.isPersonal',
+        eb
+          .exists(
+            eb
+              .selectFrom('spaceMembers')
+              .select('spaceMembers.id')
+              .where('spaceMembers.spaceId', '=', page.spaceId)
+              .where((w) =>
+                w.or([
+                  w('spaceMembers.userId', '=', newOwner.id),
+                  w(
+                    'spaceMembers.groupId',
+                    'in',
+                    w
+                      .selectFrom('groupUsers')
+                      .select('groupUsers.groupId')
+                      .where('groupUsers.userId', '=', newOwner.id),
+                  ),
+                ]),
+              ),
+          )
+          .as('isMember'),
+      ])
+      .where('spaces.id', '=', page.spaceId)
+      .executeTakeFirst();
+
+    const hasAccess =
+      !!access?.isMember ||
+      (access?.visibility === 'open' && !access?.isPersonal);
+
+    return {
+      pageIds,
+      previousOwnerId: page.creatorId ?? null,
+      newOwner: {
+        id: newOwner.id,
+        name: newOwner.name,
+        avatarUrl: newOwner.avatarUrl ?? null,
+      },
+      ...(hasAccess
+        ? {}
+        : { warning: 'New owner is not a member of this space' }),
+    };
+  }
+
   async movePageToSpace(rootPage: Page, spaceId: string, userId: string) {
     const result = await executeTx(this.db, async (trx) => {
       await this.pageRepo.lockPageHierarchySpaces(

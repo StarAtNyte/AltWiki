@@ -60,6 +60,12 @@ import {
   IAuditService,
 } from '../../integrations/audit/audit.service';
 import { getPageTitle } from '../../common/helpers';
+import { ChangePageOwnerDto } from './dto/change-owner.dto';
+import WorkspaceAbilityFactory from '../casl/abilities/workspace-ability.factory';
+import {
+  WorkspaceCaslAction,
+  WorkspaceCaslSubject,
+} from '../casl/interfaces/workspace-ability.type';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -74,6 +80,7 @@ export class PageController {
     private readonly pageAccessService: PageAccessService,
     private readonly backlinkService: BacklinkService,
     private readonly labelService: LabelService,
+    private readonly workspaceAbility: WorkspaceAbilityFactory,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -719,6 +726,80 @@ export class PageController {
     }
 
     return result;
+  }
+
+  // AltWiki: reassign page owner (creator). Workspace owners/admins, or
+  // admins of the page's space only.
+  @HttpCode(HttpStatus.OK)
+  @Post('change-owner')
+  @OAuthScope('write')
+  async changeOwner(
+    @Body() dto: ChangePageOwnerDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const page = await this.pageRepo.findById(dto.pageId);
+    if (!page || page.deletedAt || page.workspaceId !== workspace.id) {
+      throw new NotFoundException('Page not found');
+    }
+
+    const wsAbility = this.workspaceAbility.createForUser(user, workspace);
+    const isWorkspaceAdmin = wsAbility.can(
+      WorkspaceCaslAction.Manage,
+      WorkspaceCaslSubject.Settings,
+    );
+
+    if (!isWorkspaceAdmin) {
+      let isSpaceAdmin = false;
+      try {
+        const ability = await this.spaceAbility.createForUser(
+          user,
+          page.spaceId,
+        );
+        isSpaceAdmin = ability.can(
+          SpaceCaslAction.Manage,
+          SpaceCaslSubject.Settings,
+        );
+      } catch {
+        isSpaceAdmin = false;
+      }
+      if (!isSpaceAdmin) {
+        throw new ForbiddenException(
+          'Only workspace or space admins can change the page owner',
+        );
+      }
+    }
+
+    const result = await this.pageService.changeOwner(
+      page,
+      dto.userId,
+      workspace.id,
+      !!dto.includeSubpages,
+    );
+
+    this.auditService.log({
+      event: AuditEvent.PAGE_OWNER_CHANGED,
+      resourceType: AuditResource.PAGE,
+      resourceId: page.id,
+      spaceId: page.spaceId,
+      changes: {
+        before: { creatorId: result.previousOwnerId },
+        after: { creatorId: result.newOwner.id },
+      },
+      metadata: {
+        title: getPageTitle(page.title),
+        includeSubpages: !!dto.includeSubpages,
+        pageCount: result.pageIds.length,
+      },
+    });
+
+    return {
+      pageId: page.id,
+      slugId: page.slugId,
+      updatedCount: result.pageIds.length,
+      creator: result.newOwner,
+      ...(result.warning && { warning: result.warning }),
+    };
   }
 
   @HttpCode(HttpStatus.OK)
