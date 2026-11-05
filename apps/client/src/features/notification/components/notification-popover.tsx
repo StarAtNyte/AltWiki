@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   ActionIcon,
   Group,
@@ -33,6 +33,15 @@ export function NotificationPopover() {
   const { t } = useTranslation();
   const titleId = useId();
   const [opened, setOpened] = useState(false);
+  // AltWiki: open the panel against the right edge of the window (under the
+  // profile menu) instead of hanging left from the bell over the page.
+  const bellRef = useRef<HTMLButtonElement>(null);
+  const [alignShift, setAlignShift] = useState(0);
+  const toggleOpened = () => {
+    const rect = bellRef.current?.getBoundingClientRect();
+    if (rect) setAlignShift(Math.max(0, window.innerWidth - 16 - rect.right));
+    setOpened((o) => !o);
+  };
   const [tab, setTab] = useState<NotificationTab>("direct");
   const [filter, setFilter] = useState<NotificationFilter>("all");
   const [filterMenuOpened, setFilterMenuOpened] = useState(false);
@@ -54,7 +63,7 @@ export function NotificationPopover() {
       shadow="lg"
       opened={opened}
       onChange={setOpened}
-      withArrow
+      offset={{ mainAxis: 10, alignmentAxis: -alignShift }}
       trapFocus
       returnFocus
       closeOnEscape={!isSubMenuOpen}
@@ -68,7 +77,8 @@ export function NotificationPopover() {
             aria-label={t("Notifications")}
             aria-haspopup="dialog"
             aria-expanded={opened}
-            onClick={() => setOpened((o) => !o)}
+            ref={bellRef}
+            onClick={toggleOpened}
           >
             <Indicator
               offset={5}
@@ -85,7 +95,7 @@ export function NotificationPopover() {
       <Popover.Dropdown
         p={0}
         aria-labelledby={titleId}
-        style={{ width: "min(420px, calc(100vw - 24px))" }}
+        style={{ width: "min(360px, calc(100vw - 32px))" }}
       >
         <Group justify="space-between" px="md" py="sm">
           <Title id={titleId} order={2} fz="sm" fw={600}>
