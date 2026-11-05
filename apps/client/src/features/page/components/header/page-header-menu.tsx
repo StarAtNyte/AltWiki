@@ -23,7 +23,7 @@ import { usePageQuery } from "@/features/page/queries/page-query.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { notifications } from "@mantine/notifications";
 import { getAppUrl } from "@/lib/config.ts";
-import { extractPageSlugId } from "@/lib";
+import { extractPageSlugId, copyToClipboard } from "@/lib";
 import { treeApiAtom } from "@/features/page/tree/atoms/tree-api-atom.ts";
 import { useDeletePageModal } from "@/features/page/hooks/use-delete-page-modal.tsx";
 import { PageWidthToggle } from "@/features/user/components/page-width-pref.tsx";
@@ -78,21 +78,23 @@ export default function PageHeaderMenu({ readOnly }: PageHeaderMenuProps) {
 
       <Tooltip label={t("Comments")} openDelay={250} withArrow>
         <ActionIcon
-          variant="default"
-          style={{ border: "none" }}
+          variant="subtle"
+          color="gray"
+          size={32}
           onClick={() => toggleAside("comments")}
         >
-          <IconMessage size={20} stroke={2} />
+          <IconMessage size={19} stroke={1.8} />
         </ActionIcon>
       </Tooltip>
 
       <Tooltip label={t("Table of contents")} openDelay={250} withArrow>
         <ActionIcon
-          variant="default"
-          style={{ border: "none" }}
+          variant="subtle"
+          color="gray"
+          size={32}
           onClick={() => toggleAside("toc")}
         >
-          <IconList size={20} stroke={2} />
+          <IconList size={19} stroke={1.8} />
         </ActionIcon>
       </Tooltip>
 
@@ -128,7 +130,7 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
     const pageUrl =
       getAppUrl() + buildPageUrl(spaceSlug, page.slugId, page.title);
 
-    clipboard.copy(pageUrl);
+    copyToClipboard(pageUrl);
     notifications.show({ message: t("Link copied") });
   };
 
@@ -171,8 +173,8 @@ function PageActionMenu({ readOnly }: PageActionMenuProps) {
         arrowPosition="center"
       >
         <Menu.Target>
-          <ActionIcon variant="default" style={{ border: "none" }}>
-            <IconDots size={20} />
+          <ActionIcon variant="subtle" color="gray" size={32} aria-label="Page menu">
+            <IconDots size={19} />
           </ActionIcon>
         </Menu.Target>
 

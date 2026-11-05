@@ -1,0 +1,187 @@
+/* Pill trigger: glass, 36px, sits right of the greeting. */
+.button {
+  display: inline-flex;
+  align-items: center;
+  gap: rem(8px);
+  height: rem(36px);
+  padding: 0 rem(14px);
+  border-radius: 999px;
+  font-size: rem(13px);
+  font-weight: 500;
+  color: var(--app-ink);
+  /* Small control: near-opaque instead of a (costly) backdrop blur. */
+  background: var(--app-glass-strong-bg);
+  border: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-glass-shadow);
+  transition: background-color var(--app-transition);
+
+  @mixin hover {
+    background: var(--app-glass-strong-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.buttonIcon {
+  color: var(--app-text-2);
+}
+
+.buttonChevron {
+  color: var(--app-muted);
+}
+
+.dropdown {
+  padding: rem(16px);
+  border-radius: rem(14px);
+  background: var(--app-glass-strong-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border) !important;
+  box-shadow: var(--app-glass-shadow) !important;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: rem(12px);
+}
+
+.title {
+  font-size: rem(13.5px);
+  font-weight: 600;
+  color: var(--app-ink);
+}
+
+.note {
+  font-size: rem(12px);
+  font-weight: 400;
+  color: var(--app-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: rem(10px);
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: rem(6px);
+  min-width: 0;
+  border-radius: rem(8px);
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: rem(54px);
+  width: 100%;
+  border-radius: rem(8px);
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 0 0 1px var(--app-hair);
+  transition: box-shadow var(--app-transition);
+
+  .tile:hover & {
+    box-shadow: 0 0 0 1px light-dark(rgba(15, 23, 42, 0.2), rgba(255, 255, 255, 0.24));
+  }
+
+  .tile[data-active] & {
+    box-shadow: 0 0 0 2px var(--app-ink);
+  }
+}
+
+.plainThumb {
+  background: light-dark(#f4f2ee, var(--mantine-color-dark-7));
+}
+
+.uploadThumb {
+  border: 1px dashed light-dark(rgba(15, 23, 42, 0.18), rgba(255, 255, 255, 0.2));
+  box-shadow: none !important;
+  color: var(--app-text-2);
+
+  .tile[data-active] & {
+    border-style: solid;
+  }
+}
+
+.label {
+  font-size: rem(12px);
+  line-height: 1.3;
+  color: var(--app-text-2);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  .tile[data-active] & {
+    color: var(--app-ink);
+  }
+}
+
+.dim {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: rem(16px);
+  margin-top: rem(12px);
+  padding-top: rem(12px);
+  border-top: 1px solid var(--app-hair);
+  font-size: rem(12.5px);
+  color: var(--app-text-2);
+
+  &[data-disabled] {
+    opacity: 0.55;
+  }
+}
+
+.slider {
+  width: rem(150px);
+  flex-shrink: 0;
+}
+
+.sliderTrack {
+  &::before {
+    background: light-dark(rgba(15, 23, 42, 0.1), rgba(255, 255, 255, 0.12));
+  }
+}
+
+.sliderBar {
+  background: var(--app-ink);
+}
+
+.sliderThumb {
+  background: #fff;
+  border: 0;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.2), 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+.modalTitleRoot {
+  flex: 1;
+}
+
+.modalTitle {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: rem(12px);
+  padding-right: rem(8px);
+  font-size: rem(15px);
+  font-weight: 600;
+}

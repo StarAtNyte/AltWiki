@@ -16,6 +16,7 @@ import { useTranslation } from "react-i18next";
 import APP_ROUTE from "@/lib/app-route";
 import { MfaSetupModal } from "@/ee/mfa";
 import classes from "@/features/auth/components/auth.module.css";
+import { AuthBrand } from "@/features/auth/components/auth-layout.tsx";
 import { notifications } from "@mantine/notifications";
 import { useMfaPageProtection } from "@/ee/mfa";
 
@@ -48,11 +49,12 @@ export function MfaSetupRequiredPage() {
 
   return (
     <Container size={480} className={classes.container}>
-      <Paper radius="lg" p={40}>
+      <Paper radius="lg" className={classes.containerBox} bg="transparent">
+        <AuthBrand />
         <Stack align="center" gap="xl">
           <Center>
-            <ThemeIcon size={80} radius="xl" variant="light" color="blue">
-              <IconShieldCheck size={40} stroke={1.5} />
+            <ThemeIcon size={56} radius="xl" variant="light" color="gray">
+              <IconShieldCheck size={28} stroke={1.5} />
             </ThemeIcon>
           </Center>
 

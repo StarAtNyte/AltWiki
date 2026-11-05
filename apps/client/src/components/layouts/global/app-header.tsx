@@ -2,7 +2,7 @@ import { Badge, Group, Text, Tooltip } from "@mantine/core";
 import classes from "./app-header.module.css";
 import React from "react";
 import TopMenu from "@/components/layouts/global/top-menu.tsx";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import APP_ROUTE from "@/lib/app-route.ts";
 import { useAtom } from "jotai";
 import {
@@ -23,11 +23,6 @@ import {
   shareSearchSpotlight,
 } from "@/features/search/constants.ts";
 
-const links = [
-  { link: APP_ROUTE.HOME, label: "Home" },
-  { link: "/spaces", label: "Spaces" },
-];
-
 export function AppHeader() {
   const { t } = useTranslation();
   const [mobileOpened] = useAtom(mobileSidebarAtom);
@@ -37,69 +32,58 @@ export function AppHeader() {
   const toggleDesktop = useToggleSidebar(desktopSidebarAtom);
   const { isTrial, trialDaysLeft } = useTrial();
 
+  const location = useLocation();
   const isHomeRoute = location.pathname.startsWith("/home");
   const isSpacesRoute = location.pathname === "/spaces";
   const hideSidebar = isHomeRoute || isSpacesRoute;
 
-  const items = links.map((link) => (
-    <Link key={link.label} to={link.link} className={classes.link}>
-      {t(link.label)}
-    </Link>
-  ));
-
   return (
     <>
-      <Group h="100%" px="md" justify="space-between" wrap={"nowrap"}>
-        <Group wrap="nowrap">
+      <div className={classes.inner} data-home={isHomeRoute || isSpacesRoute || undefined}>
+        <Group wrap="nowrap" gap={6} className={classes.start}>
+          <Tooltip label={t("Sidebar toggle")}>
+            <SidebarToggle
+              aria-label={t("Sidebar toggle")}
+              opened={mobileOpened}
+              onClick={toggleMobile}
+              hiddenFrom="sm"
+              size="sm"
+            />
+          </Tooltip>
+
+          <Link to="/home" className={classes.brand} aria-label="AltWiki">
+            <Text component="span" className={classes.wordmark}>
+              AltWiki
+            </Text>
+          </Link>
+
           {!hideSidebar && (
-            <>
-              <Tooltip label={t("Sidebar toggle")}>
-                <SidebarToggle
-                  aria-label={t("Sidebar toggle")}
-                  opened={mobileOpened}
-                  onClick={toggleMobile}
-                  hiddenFrom="sm"
-                  size="sm"
-                />
-              </Tooltip>
-
-              <Tooltip label={t("Sidebar toggle")}>
-                <SidebarToggle
-                  aria-label={t("Sidebar toggle")}
-                  opened={desktopOpened}
-                  onClick={toggleDesktop}
-                  visibleFrom="sm"
-                  size="sm"
-                />
-              </Tooltip>
-            </>
+            <Tooltip label={t("Sidebar toggle")}>
+              <SidebarToggle
+                aria-label={t("Sidebar toggle")}
+                opened={desktopOpened}
+                onClick={toggleDesktop}
+                visibleFrom="sm"
+                size="sm"
+                ml={6}
+                className={classes.toggle}
+              />
+            </Tooltip>
           )}
-
-          <Text
-            size="lg"
-            fw={600}
-            style={{ cursor: "pointer", userSelect: "none" }}
-            component={Link}
-            to="/home"
-          >
-            AltWiki
-          </Text>
-
-          <Group ml={50} gap={5} className={classes.links} visibleFrom="sm">
-            {items}
-          </Group>
         </Group>
 
-        <div>
-          <Group visibleFrom="sm">
-            <SearchControl onClick={searchSpotlight.open} />
-          </Group>
+        <div className={classes.center}>
+          <SearchControl
+            onClick={searchSpotlight.open}
+            visibleFrom="sm"
+            variant="pill"
+          />
           <Group hiddenFrom="sm">
             <SearchMobileControl onSearch={searchSpotlight.open} />
           </Group>
         </div>
 
-        <Group px={"xl"} wrap="nowrap">
+        <Group wrap="nowrap" gap="sm" justify="flex-end" className={classes.end}>
           {isCloud() && isTrial && trialDaysLeft !== 0 && (
             <Badge
               variant="light"
@@ -115,7 +99,7 @@ export function AppHeader() {
           )}
           <TopMenu />
         </Group>
-      </Group>
+      </div>
     </>
   );
 }

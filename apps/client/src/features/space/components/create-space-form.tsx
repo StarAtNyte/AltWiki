@@ -98,8 +98,9 @@ export function CreateSpaceForm() {
               placeholder={t("e.g Space for product team")}
               variant="filled"
               autosize
-              minRows={2}
-              maxRows={8}
+              minRows={4}
+              maxRows={10}
+              w="100%"
               {...form.getInputProps("description")}
             />
           </Stack>

@@ -1,4 +1,5 @@
 import * as React from "react";
+import { AuthBrand } from "@/features/auth/components/auth-layout.tsx";
 import * as z from "zod";
 
 import { useForm } from "@mantine/form";
@@ -69,6 +70,7 @@ export function InviteSignUpForm() {
   return (
     <Container size={420} className={classes.container}>
       <Box p="xl" className={classes.containerBox}>
+        <AuthBrand />
         <Title order={2} ta="center" fw={500} mb="md">
           {t("Join the workspace")}
         </Title>

@@ -6,7 +6,7 @@ services:
       - db
       - redis
     environment:
-      APP_URL: 'http://192.168.50.28:3001'
+      APP_URL: 'https://wiki.at.online'
       APP_SECRET: '5c33c625b8fb1f298670856dad5d435088902222d30ef6197ee0f0ead8e1b877'
       DATABASE_URL: 'postgresql://docmost:atpass@db:5432/docmost?schema=public'
       REDIS_URL: 'redis://redis:6379'

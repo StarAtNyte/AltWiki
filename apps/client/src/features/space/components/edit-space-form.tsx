@@ -89,8 +89,9 @@ export function EditSpaceForm({ space, readOnly }: EditSpaceFormProps) {
               variant="filled"
               readOnly={readOnly}
               autosize
-              minRows={1}
-              maxRows={3}
+              minRows={4}
+              maxRows={10}
+              w="100%"
               {...form.getInputProps("description")}
             />
           </Stack>

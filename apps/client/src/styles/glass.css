@@ -1,0 +1,77 @@
+/*
+ * Glass tokens shared by the few large frosted surfaces (rail, sidebar,
+ * aside, header search pill, home / space panels, popovers). Per-item cards,
+ * rows and small controls use near-opaque fills instead: backdrop-filter is
+ * re-evaluated on every scroll / repaint of whatever lies beneath it.
+ */
+:root {
+  --app-blur: blur(14px) saturate(140%);
+  --app-overlay-blur: blur(4px);
+}
+
+/*
+ * Users who ask for less transparency (or browsers without backdrop-filter)
+ * get solid surfaces.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  :root:root[data-mantine-color-scheme] {
+    --app-blur: none;
+    --app-overlay-blur: none;
+    --app-glass-bg: var(--app-doc-bg);
+    --app-glass-soft-bg: var(--app-doc-bg);
+    --app-glass-strong-bg: var(--app-doc-bg);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root,
+  :root:root[data-mantine-color-scheme] {
+    --app-glass-bg: var(--app-glass-strong-bg);
+    --app-glass-soft-bg: var(--app-glass-strong-bg);
+  }
+}
+
+/*
+ * The background photo: one fixed layer behind everything (see AppBackdrop).
+ * The photo is an <img> (decoded off the main thread); the neutral wash and
+ * the "Dim photo" amount are two flat colour layers above it.
+ *
+ * Driven by variables set on <html> by AppBackdrop:
+ *   --app-bg-dim    extra wash from the "Dim photo" slider (0 - 0.7)
+ *   --app-bg-wash   1 for photos, 0 for the plain preset
+ */
+.app-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: var(--app-plain-bg);
+}
+
+.app-backdrop > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 40%;
+  user-select: none;
+}
+
+.app-backdrop::before,
+.app-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.app-backdrop::before {
+  background: rgb(
+    var(--app-wash-rgb) / calc(var(--app-wash-alpha) * var(--app-bg-wash, 1))
+  );
+}
+
+.app-backdrop::after {
+  background: rgb(var(--app-wash-rgb) / var(--app-bg-dim, 0));
+}

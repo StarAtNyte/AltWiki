@@ -26,6 +26,7 @@ import { useGetSpacesQuery } from "@/features/space/queries/space-query";
 import { useLicense } from "@/ee/hooks/use-license";
 import classes from "./search-spotlight-filters.module.css";
 import { isCloud } from "@/lib/config.ts";
+import { SpaceAvatar } from "@/components/ui/space-avatar.tsx";
 import { useAtom } from "jotai/index";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom.ts";
 
@@ -55,7 +56,8 @@ export function SearchSpotlightFilters({
   const { data: spacesData } = useGetSpacesQuery({
     page: 1,
     limit: 100,
-    query: debouncedSpaceQuery,
+    // undefined (not "") when empty, so it shares the rail's cached list.
+    query: debouncedSpaceQuery || undefined,
   });
 
   const selectedSpaceData = useMemo(() => {
@@ -129,7 +131,7 @@ export function SearchSpotlightFilters({
 
   return (
     <div className={classes.filtersContainer}>
-      {workspace?.settings?.ai?.search === true && (
+      {(isCloud() || hasLicenseKey) && workspace?.settings?.ai?.search === true && (
         <div
           style={{
             display: "flex",
@@ -165,8 +167,8 @@ export function SearchSpotlightFilters({
             variant="subtle"
             color="gray"
             size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconBuilding size={16} />}
+            rightSection={<IconChevronDown size={14} stroke={1.5} />}
+            leftSection={<IconBuilding size={15} stroke={1.5} />}
             className={classes.filterButton}
             fw={500}
           >
@@ -192,12 +194,9 @@ export function SearchSpotlightFilters({
           <ScrollArea.Autosize mah={280}>
             <Menu.Item onClick={() => handleSpaceSelect(null)}>
               <Group flex="1" gap="xs">
-                <Avatar
-                  color="initials"
-                  variant="filled"
-                  name={t("All spaces")}
-                  size={20}
-                />
+                <Avatar variant="light" color="gray" radius={6} size={20}>
+                  <IconBuilding size={12} stroke={1.75} />
+                </Avatar>
                 <div style={{ flex: 1 }}>
                   <Text size="sm" fw={500}>
                     {t("All spaces")}
@@ -206,7 +205,7 @@ export function SearchSpotlightFilters({
                     {t("Search in all your spaces")}
                   </Text>
                 </div>
-                {!selectedSpaceId && <IconCheck size={20} />}
+                {!selectedSpaceId && <IconCheck size={16} stroke={1.75} />}
               </Group>
             </Menu.Item>
 
@@ -218,16 +217,11 @@ export function SearchSpotlightFilters({
                 onClick={() => handleSpaceSelect(space.id)}
               >
                 <Group flex="1" gap="xs">
-                  <Avatar
-                    color="initials"
-                    variant="filled"
-                    name={space.name}
-                    size={20}
-                  />
+                  <SpaceAvatar name={space.name} logo={space.logo} size={20} />
                   <Text size="sm" fw={500} style={{ flex: 1 }} truncate>
                     {space.name}
                   </Text>
-                  {selectedSpaceId === space.id && <IconCheck size={20} />}
+                  {selectedSpaceId === space.id && <IconCheck size={16} stroke={1.75} />}
                 </Group>
               </Menu.Item>
             ))}
@@ -246,8 +240,8 @@ export function SearchSpotlightFilters({
             variant="subtle"
             color="gray"
             size="sm"
-            rightSection={<IconChevronDown size={14} />}
-            leftSection={<IconFileDescription size={16} />}
+            rightSection={<IconChevronDown size={14} stroke={1.5} />}
+            leftSection={<IconFileDescription size={15} stroke={1.5} />}
             className={classes.filterButton}
             fw={500}
           >
@@ -281,7 +275,7 @@ export function SearchSpotlightFilters({
                     </Text>
                   )}
                 </div>
-                {contentType === option.value && <IconCheck size={20} />}
+                {contentType === option.value && <IconCheck size={16} stroke={1.75} />}
               </Group>
             </Menu.Item>
           ))}

@@ -1,23 +1,70 @@
-.header {
-    height: 100%;
-    margin-bottom: rem(120px);
-    background-color: var(--mantine-color-body);
-    border-bottom: rem(1px) solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
-    padding-left: var(--mantine-spacing-md);
-    padding-right: var(--mantine-spacing-md);
+/*
+ * Header over the photo: wordmark | pill search (centred) | workspace menu.
+ * On the home route the contents align with the 1184px home container.
+ */
+.inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--mantine-spacing-md);
+  height: 100%;
+  width: 100%;
+  padding-inline: var(--mantine-spacing-md);
+
+  /* Same frame as the home page (see home.module.css .frame): content is
+     centred between the rail's outer edge and the viewport edge. */
+  &[data-home] {
+    max-width: calc(rem(1184px) + rem(36px));
+    margin-inline: auto;
+    padding-inline: rem(12px) rem(24px);
+
+    @media (max-width: $mantine-breakpoint-sm) {
+      padding-inline: rem(16px);
+    }
+  }
+
+  @media (max-width: $mantine-breakpoint-sm) {
+    padding-inline: rem(16px);
+    column-gap: var(--mantine-spacing-xs);
+  }
 }
 
-.link {
-    display: block;
-    line-height: 1;
-    padding: rem(8px) rem(12px);
-    border-radius: var(--mantine-radius-sm);
-    text-decoration: none;
-    color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
-    font-size: var(--mantine-font-size-sm);
-    font-weight: 500;
+.start {
+  min-width: 0;
+}
 
-    @mixin hover {
-        background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
-    }
+.center {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.end {
+  min-width: 0;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--app-ink);
+  user-select: none;
+  white-space: nowrap;
+  border-radius: var(--mantine-radius-md);
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+}
+
+.wordmark {
+  font-size: rem(17px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--app-ink);
+}
+
+.toggle {
+  color: var(--app-text-2);
 }

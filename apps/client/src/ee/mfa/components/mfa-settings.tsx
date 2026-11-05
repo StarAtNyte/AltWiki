@@ -19,16 +19,18 @@ export function MfaSettings() {
   const [backupCodesModalOpen, setBackupCodesModalOpen] = useState(false);
   const { hasLicenseKey } = useLicense();
 
+  const canUseMfa = isCloud() || hasLicenseKey;
+
+  // No EE backend without cloud/license: skip the /mfa/status call (404).
   const { data: mfaStatus, isLoading } = useQuery({
     queryKey: ["mfa-status"],
     queryFn: getMfaStatus,
+    enabled: !!canUseMfa,
   });
 
-  if (isLoading || !mfaStatus) {
+  if (!canUseMfa || isLoading || !mfaStatus) {
     return null;
   }
-
-  const canUseMfa = isCloud() || hasLicenseKey;
 
   // Check if MFA is truly enabled
   const isMfaEnabled = mfaStatus?.isEnabled === true;

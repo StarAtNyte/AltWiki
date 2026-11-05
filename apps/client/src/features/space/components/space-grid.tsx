@@ -1,4 +1,4 @@
-import { Text, SimpleGrid, Card, rem, Group, Button } from "@mantine/core";
+import { Button, Skeleton, Text } from "@mantine/core";
 import React from "react";
 import {
   prefetchSpace,
@@ -8,51 +8,45 @@ import {
 import { getSpaceUrl } from "@/lib/config.ts";
 import { Link } from "react-router-dom";
 import classes from "./space-grid.module.css";
+import homeClasses from "@/features/home/components/home.module.css";
 import { formatMemberCount } from "@/lib";
 import { useTranslation } from "react-i18next";
-import { IconArrowRight } from "@tabler/icons-react";
-import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
-import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import {
+  IconArrowRight,
+  IconChevronRight,
+  IconLayoutGrid,
+} from "@tabler/icons-react";
+import clsx from "clsx";
+import { SpaceAvatar } from "@/components/ui/space-avatar.tsx";
+import { partitionArchivedSpaces } from "@/features/space/utils/archived-space.ts";
+import ArchivedSection from "@/features/space/components/archived-section.tsx";
+import { ISpace } from "@/features/space/types/space.types.ts";
 
 export default function SpaceGrid() {
   const { t } = useTranslation();
-  const { data, isLoading } = useGetSpacesQuery({ page: 1, limit: 10 });
+  // Same key as the rail (space-rail.tsx): one shared request.
+  const { data, isLoading } = useGetSpacesQuery({ page: 1, limit: 100 });
   const joinSpace = useJoinSpaceMutation();
+  const { active, archived } = partitionArchivedSpaces<ISpace>(data?.items);
 
-  const cards = data?.items.slice(0, 9).map((space) => (
-    <Card
+  const renderCard = (space: ISpace) => (
+    <Link
       key={space.id}
-      p="xs"
-      radius="md"
-      component={Link}
       to={getSpaceUrl(space.slug)}
       onMouseEnter={() => prefetchSpace(space.slug, space.id)}
       className={classes.card}
-      withBorder
     >
-      <Card.Section className={classes.cardSection} h={40}></Card.Section>
-      <CustomAvatar
-        name={space.name}
-        avatarUrl={space.logo}
-        type={AvatarIconType.SPACE_ICON}
-        color="initials"
-        variant="filled"
-        size="md"
-        mt={rem(-20)}
-      />
-
-      <Text fz="md" fw={500} mt="xs" className={classes.title}>
-        {space.name}
-      </Text>
-
-      <Group justify="space-between" align="center" mt="md">
-        <Text c="dimmed" size="xs" fw={700}>
-          {formatMemberCount(space.memberCount, t)}
-        </Text>
-        {!space.isMember && (
+      <span className={classes.cardTop}>
+        <SpaceAvatar
+          name={space.name}
+          logo={space.logo}
+          size={32}
+          radius={8}
+        />
+        {space.isMember === false ? (
           <Button
-            size="xs"
-            variant="outline"
+            size="compact-xs"
+            variant="default"
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -61,34 +55,59 @@ export default function SpaceGrid() {
           >
             {t("Join")}
           </Button>
+        ) : (
+          <IconChevronRight size={16} stroke={1.6} className={classes.chevron} />
         )}
-      </Group>
-    </Card>
-  ));
+      </span>
+      <span className={classes.body}>
+        <span className={classes.title}>{space.name}</span>
+        <span className={classes.meta}>
+          {typeof space.memberCount === "number"
+            ? formatMemberCount(space.memberCount, t)
+            : t("Space")}
+        </span>
+      </span>
+    </Link>
+  );
 
   return (
-    <>
-      <Group justify="space-between" align="center" mb="md">
-        <Text fz="sm" fw={500}>
+    <section className={clsx(homeClasses.glass, homeClasses.spaces)}>
+      <div className={homeClasses.panelHead}>
+        <h2 className={homeClasses.panelTitle}>
+          <IconLayoutGrid size={18} stroke={1.6} className={homeClasses.panelIcon} />
           {t("Spaces")}
-        </Text>
-      </Group>
+          {!isLoading && (
+            <span className={homeClasses.count}>{active.length}</span>
+          )}
+        </h2>
+        <Link to="/spaces" className={homeClasses.link}>
+          {t("View all spaces")}
+          <IconArrowRight size={14} stroke={1.75} />
+        </Link>
+      </div>
 
-      <SimpleGrid cols={{ base: 1, xs: 2, sm: 3 }}>{cards}</SimpleGrid>
+      <div className={classes.grid}>
+        {isLoading
+          ? Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} height={104} radius={14} />
+            ))
+          : active.slice(0, 10).map(renderCard)}
+      </div>
 
-      {data?.items && data.items.length > 9 && (
-        <Group justify="flex-end" mt="lg">
-          <Button
-            component={Link}
-            to="/spaces"
-            variant="subtle"
-            rightSection={<IconArrowRight size={16} />}
-            size="sm"
-          >
-            {t("View all spaces")}
-          </Button>
-        </Group>
+      {!isLoading && active.length === 0 && (
+        <div className={classes.empty}>
+          <Text size="sm" fw={500}>
+            {t("No spaces yet")}
+          </Text>
+          <Text size="xs" c="dimmed">
+            {t("Spaces you join will appear here.")}
+          </Text>
+        </div>
       )}
-    </>
+
+      <ArchivedSection count={archived.length}>
+        <div className={classes.grid}>{archived.map(renderCard)}</div>
+      </ArchivedSection>
+    </section>
   );
 }

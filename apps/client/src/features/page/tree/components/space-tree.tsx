@@ -68,7 +68,7 @@ import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { notifications } from "@mantine/notifications";
 import { getAppUrl } from "@/lib/config.ts";
-import { extractPageSlugId } from "@/lib";
+import { extractPageSlugId, copyToClipboard } from "@/lib";
 import { useDeletePageModal } from "@/features/page/hooks/use-delete-page-modal.tsx";
 import { useTranslation } from "react-i18next";
 import ExportModal from "@/components/common/export-modal";
@@ -429,7 +429,9 @@ function Node({
   return (
     <>
       <Box
-        style={style}
+        style={
+          { ...style, "--tree-level": node.level } as React.CSSProperties
+        }
         className={clsx(classes.node, node.state, {
           [classes.bulkSelected]: isSelected,
         })}
@@ -438,6 +440,15 @@ function Node({
         // @ts-ignore
         ref={dragHandle}
         onClick={() => {
+          // Opening a page also reveals its children (never collapses it);
+          // the chevron keeps toggling independently.
+          if (
+            node.isClosed &&
+            (node.children?.length > 0 || node.data.hasChildren)
+          ) {
+            node.open();
+            handleLoadChildren(node);
+          }
           closeMobileSidebar(false);
         }}
         onMouseEnter={prefetchPage}
@@ -568,7 +579,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
   const handleCopyLink = () => {
     const pageUrl =
       getAppUrl() + buildPageUrl(spaceSlug, node.data.slugId, node.data.name);
-    clipboard.copy(pageUrl);
+    copyToClipboard(pageUrl);
     notifications.show({ message: t("Link copied") });
   };
 

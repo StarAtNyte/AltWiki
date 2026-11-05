@@ -1,3 +1,4 @@
+import { assignRandomSpaceIcon } from "@/features/space/icons/space-icons.ts";
 import {
   keepPreviousData,
   useMutation,
@@ -83,11 +84,22 @@ export function useCreateSpaceMutation() {
 
   return useMutation<ISpace, Error, Partial<ISpace>>({
     mutationFn: (data) => createSpace(data),
-    onSuccess: () => {
+    onSuccess: (space) => {
       queryClient.invalidateQueries({
         queryKey: ["spaces"],
       });
       notifications.show({ message: t("Space created successfully") });
+      // Give the new space a random icon. Never blocks or fails creation.
+      if (space?.id && !space.logo) {
+        assignRandomSpaceIcon(space.id)
+          .then(() =>
+            queryClient.invalidateQueries({
+              predicate: (item) =>
+                ["spaces", "space"].includes(item.queryKey[0] as string),
+            }),
+          )
+          .catch((err) => console.warn("Could not set space icon", err));
+      }
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;

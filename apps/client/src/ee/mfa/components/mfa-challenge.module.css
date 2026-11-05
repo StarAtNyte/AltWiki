@@ -1,12 +1,11 @@
-.container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
-
+/* The card itself is the auth glass card (auth.module.css .container). */
 .paper {
   width: 100%;
-  box-shadow: var(--mantine-shadow-lg);
+  padding: rem(32px);
+  background: transparent;
+  box-shadow: none;
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    padding: rem(24px) rem(20px);
+  }
 }

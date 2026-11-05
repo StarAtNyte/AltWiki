@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AuthBrand } from "@/features/auth/components/auth-layout.tsx";
 import * as z from "zod";
 import { useForm, zodResolver } from "@mantine/form";
 import useAuth from "@/features/auth/hooks/use-auth";
@@ -37,6 +38,7 @@ export function ForgotPasswordForm() {
   return (
     <Container size={420} className={classes.container}>
       <Box p="xl" className={classes.containerBox}>
+        <AuthBrand />
         <Title order={2} ta="center" fw={500} mb="md">
           {t("Forgot password")}
         </Title>

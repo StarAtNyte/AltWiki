@@ -32,7 +32,6 @@ import {
   prefetchSsoProviders,
   prefetchWorkspaceMembers,
 } from "@/components/settings/settings-queries.tsx";
-import AppVersion from "@/components/settings/app-version.tsx";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { useSettingsNavigation } from "@/hooks/use-settings-navigation";
@@ -46,6 +45,7 @@ interface DataItem {
   isAdmin?: boolean;
   isSelfhosted?: boolean;
   showDisabledInNonEE?: boolean;
+  requiresEE?: boolean;
 }
 
 interface DataGroup {
@@ -116,6 +116,7 @@ const groupedData: DataGroup[] = [
         path: "/settings/ai",
         isAdmin: true,
         isSelfhosted: true,
+        requiresEE: true,
       },
     ],
   },
@@ -126,6 +127,7 @@ const groupedData: DataGroup[] = [
         label: "License & Edition",
         icon: IconKey,
         path: "/settings/license",
+        requiresEE: true,
       },
     ],
   },
@@ -145,9 +147,16 @@ export default function SettingsSidebar() {
     setActive(location.pathname);
   }, [location.pathname]);
 
+  // The server ships no enterprise module, so EE-backed entries are hidden
+  // unless the workspace is cloud or has a license key (reversible gate).
+  const eeAvailable = isCloud() || !!workspace?.hasLicenseKey;
+
   const canShowItem = (item: DataItem) => {
+    if (!eeAvailable && (item.isEnterprise || item.requiresEE)) {
+      return false;
+    }
+
     if (item.showDisabledInNonEE && item.isEnterprise) {
-      // Check admin permission regardless of license
       return item.isAdmin ? isAdmin : true;
     }
 
@@ -183,7 +192,7 @@ export default function SettingsSidebar() {
   };
 
   const menuItems = groupedData.map((group) => {
-    if (group.heading === "System" && (!isAdmin || isCloud())) {
+    if (group.heading === "System" && (!isAdmin || isCloud() || !eeAvailable)) {
       return null;
     }
 
@@ -300,7 +309,6 @@ export default function SettingsSidebar() {
 
       <ScrollArea w="100%">{menuItems}</ScrollArea>
 
-      {!isCloud() && <AppVersion />}
 
       {isCloud() && (
         <div className={classes.text}>

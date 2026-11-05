@@ -53,6 +53,7 @@ export function convertConfluenceContent(
   processTableOfContents($);
   processPageLinks($, titleToPageId);
   processAttachmentImages($, pageId);
+  processMediaMacros($);
   processAttachmentLinks($, pageId);
   processEmoticons($);
   processTaskLists($);
@@ -62,7 +63,10 @@ export function convertConfluenceContent(
   processLayoutMacros($);
 
   // Get the inner content without the wrapper div
-  const result = $('div').first().html() || '';
+  let result = $('div').first().html() || '';
+
+  // Final cleanup: remove any remaining Confluence XML tags that weren't processed
+  result = cleanupConfluenceTags(result);
 
   return result;
 }
@@ -86,10 +90,49 @@ function processCodeMacros($: CheerioAPI): void {
       title = $(param).text().trim();
     });
 
-    // Get the plain text body
-    const codeContent =
-      $macro.find('ac\\:plain-text-body').text() ||
-      $macro.find('ac\\:rich-text-body').text();
+    // Get the plain text body - extract raw content including CDATA
+    const $plainTextBody = $macro.find('ac\\:plain-text-body').first();
+    const $richTextBody = $macro.find('ac\\:rich-text-body').first();
+
+    let codeContent = '';
+    if ($plainTextBody.length) {
+      // Get the HTML of the body element and extract just the text content
+      let bodyHtml = $plainTextBody.html() || '';
+
+      // If it's wrapped in CDATA, extract the content
+      if (bodyHtml.includes('<![CDATA[')) {
+        const cdataMatch = bodyHtml.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+        if (cdataMatch) {
+          codeContent = cdataMatch[1];
+        } else {
+          // Fallback to text extraction
+          codeContent = extractTextContent($plainTextBody);
+        }
+      } else {
+        codeContent = extractTextContent($plainTextBody);
+      }
+    } else if ($richTextBody.length) {
+      let bodyHtml = $richTextBody.html() || '';
+
+      if (bodyHtml.includes('<![CDATA[')) {
+        const cdataMatch = bodyHtml.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+        if (cdataMatch) {
+          codeContent = cdataMatch[1];
+        } else {
+          codeContent = extractTextContent($richTextBody);
+        }
+      } else {
+        codeContent = extractTextContent($richTextBody);
+      }
+    }
+
+    // Clean up any XML artifacts that might have leaked through
+    codeContent = codeContent
+      .replace(/^\s*\]\]>\s*/, '') // Remove CDATA closing marker at start
+      .replace(/\]\]>\s*$/, '') // Remove CDATA closing marker at end
+      .replace(/\]\]\s*>\s*$/, '') // Remove CDATA with space before >
+      .replace(/<!\[CDATA\[/g, '') // Remove CDATA opening markers
+      .trim();
 
     // Create code block
     const $pre = $('<pre>');
@@ -102,6 +145,26 @@ function processCodeMacros($: CheerioAPI): void {
 
     $macro.replaceWith($pre);
   });
+}
+
+/**
+ * Helper function to extract text content from an element, handling CDATA properly
+ */
+function extractTextContent($element: Cheerio<any>): string {
+  if (!$element.length) return '';
+
+  // Get all child nodes including text nodes and CDATA
+  const contents = $element.contents();
+  let text = '';
+
+  contents.each((_, node: any) => {
+    if (node.type === 'text' || node.type === 'cdata') {
+      text += (node.data || node.nodeValue || '');
+    }
+  });
+
+  // Fallback to .text() if no content was found
+  return text || $element.text();
 }
 
 /**
@@ -337,6 +400,38 @@ function processAttachmentImages($: CheerioAPI, pageId: string): void {
 }
 
 /**
+ * Process multimedia / view-file macros that embed an attachment, e.g.
+ * <ac:structured-macro ac:name="multimedia">
+ *   <ac:parameter ac:name="name"><ri:attachment ri:filename="clip.mp4"/></ac:parameter>
+ * </ac:structured-macro>
+ * They become placeholder links; the attachment import step turns links to
+ * video files into video nodes and everything else into attachment nodes.
+ */
+function processMediaMacros($: CheerioAPI): void {
+  const names = ['multimedia', 'view-file', 'viewfile', 'widget'];
+  const selector = names
+    .flatMap((name) => [
+      `ac\\:structured-macro[ac\\:name="${name}"]`,
+      `ac\\:macro[ac\\:name="${name}"]`,
+    ])
+    .join(', ');
+
+  $(selector).each((_, el) => {
+    const $macro = $(el);
+    const $attachmentRef = $macro.find('ri\\:attachment').first();
+    const fileName = $attachmentRef.attr('ri:filename') || '';
+    if (!fileName) return;
+
+    const $anchor = $('<a>')
+      .attr('href', `confluence-attachment:${fileName}`)
+      .attr('data-linked-resource-default-alias', fileName)
+      .text(fileName);
+
+    $macro.replaceWith($anchor);
+  });
+}
+
+/**
  * Process attachment links
  */
 function processAttachmentLinks($: CheerioAPI, pageId: string): void {
@@ -439,9 +534,22 @@ function processNoFormatMacros($: CheerioAPI): void {
   $('ac\\:structured-macro[ac\\:name="noformat"]').each((_, el) => {
     const $macro = $(el);
 
-    const content =
-      $macro.find('ac\\:plain-text-body').text() ||
-      $macro.find('ac\\:rich-text-body').text();
+    const $plainTextBody = $macro.find('ac\\:plain-text-body').first();
+    const $richTextBody = $macro.find('ac\\:rich-text-body').first();
+
+    let content = '';
+    if ($plainTextBody.length) {
+      content = extractTextContent($plainTextBody);
+    } else if ($richTextBody.length) {
+      content = extractTextContent($richTextBody);
+    }
+
+    // Clean up any XML artifacts
+    content = content
+      .replace(/^\s*\]\]>\s*/, '')
+      .replace(/\]\]>\s*$/, '')
+      .replace(/<!\[CDATA\[/g, '')
+      .trim();
 
     const $pre = $('<pre>');
     const $code = $('<code>').text(content);
@@ -478,6 +586,48 @@ function processLayoutMacros($: CheerioAPI): void {
     const layoutContent = load(layoutHtml, { xml: true });
     $layout.replaceWith(layoutContent.root().children());
   });
+}
+
+/**
+ * Removes any remaining Confluence-specific XML tags and attributes
+ */
+function cleanupConfluenceTags(html: string): string {
+  // Remove any remaining ac:*, ri:* and other Confluence XML tags
+  // These regex patterns handle both self-closing and paired tags
+  let cleaned = html;
+
+  // First, remove CDATA closing markers with optional space and following XML closing tags
+  // Pattern: ]] > or ]]> followed by </ac:plain-text-body> or similar
+  cleaned = cleaned.replace(/\]\]\s*>\s*<\/ac:plain-text-body>/gi, '');
+  cleaned = cleaned.replace(/\]\]\s*>\s*<\/ac:rich-text-body>/gi, '');
+
+  // Remove any standalone CDATA markers
+  cleaned = cleaned.replace(/<!\[CDATA\[/g, '');
+  cleaned = cleaned.replace(/\]\]>/g, '');
+
+  // Remove all Confluence namespace tags (ac:*, ri:*, at:*)
+  // This handles both opening and closing tags with any attributes
+  cleaned = cleaned.replace(/<\/?ac:[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<\/?ri:[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<\/?at:[^>]*>/gi, '');
+
+  // Remove Confluence-specific attributes from remaining tags
+  cleaned = cleaned.replace(/\s+ac:[a-z-]+="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ri:[a-z-]+="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+local-id="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ac:name="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ac:schema-version="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ac:macro-id="[^"]*"/gi, '');
+
+  // Clean up any double spaces or empty attributes left behind
+  cleaned = cleaned.replace(/\s{2,}/g, ' ');
+  cleaned = cleaned.replace(/\s+>/g, '>');
+
+  // Remove any orphaned closing tags
+  cleaned = cleaned.replace(/<\/ac:[^>]+>/gi, '');
+  cleaned = cleaned.replace(/<\/ri:[^>]+>/gi, '');
+
+  return cleaned;
 }
 
 /**

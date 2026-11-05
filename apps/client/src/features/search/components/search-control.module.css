@@ -42,3 +42,59 @@
         background-color: var(--mantine-color-dark-7);
     }
 }
+/* Header pill: glass, 44px x 480px. */
+.pill {
+  display: flex;
+  align-items: center;
+  gap: rem(12px);
+  width: rem(480px);
+  max-width: 100%;
+  height: rem(44px);
+  padding: 0 rem(10px) 0 rem(16px);
+  border-radius: 999px;
+  color: var(--app-muted);
+  background: var(--app-glass-bg);
+  backdrop-filter: var(--app-blur);
+  -webkit-backdrop-filter: var(--app-blur);
+  border: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-glass-shadow);
+  transition: background-color var(--app-transition);
+
+  @mixin hover {
+    background: var(--app-glass-strong-bg);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--app-focus-ring);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: $mantine-breakpoint-md) {
+    width: rem(340px);
+  }
+}
+
+.pillIcon {
+  flex-shrink: 0;
+}
+
+.pillText {
+  flex: 1;
+  min-width: 0;
+  font-size: rem(14px);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pillKbd {
+  flex-shrink: 0;
+  font-size: rem(11px);
+  line-height: 1.4;
+  padding: rem(2px) rem(6px);
+  border-radius: rem(6px);
+  border: 1px solid var(--app-hair);
+  background: light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.06));
+  color: var(--app-text-2);
+}

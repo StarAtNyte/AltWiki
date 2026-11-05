@@ -17,6 +17,8 @@ import { IconDeviceMobile, IconLock } from "@tabler/icons-react";
 import { useNavigate } from "react-router-dom";
 import { notifications } from "@mantine/notifications";
 import classes from "./mfa-challenge.module.css";
+import authClasses from "@/features/auth/components/auth.module.css";
+import { AuthBrand } from "@/features/auth/components/auth-layout.tsx";
 import { verifyMfa } from "@/ee/mfa";
 import APP_ROUTE from "@/lib/app-route";
 import { useTranslation } from "react-i18next";
@@ -66,12 +68,13 @@ export function MfaChallenge() {
   };
 
   return (
-    <Container size={420} className={classes.container}>
-      <Paper radius="lg" p={40} className={classes.paper}>
+    <Container size={420} className={authClasses.container}>
+      <Paper radius="lg" className={classes.paper}>
+        <AuthBrand />
         <Stack align="center" gap="xl">
           <Center>
-            <ThemeIcon size={80} radius="xl" variant="light" color="blue">
-              <IconDeviceMobile size={40} stroke={1.5} />
+            <ThemeIcon size={56} radius="xl" variant="light" color="gray">
+              <IconDeviceMobile size={28} stroke={1.5} />
             </ThemeIcon>
           </Center>
 

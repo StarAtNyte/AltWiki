@@ -21,6 +21,7 @@ import { EventName } from '../../../common/events/event.contants';
 import {
   parseConfluenceExport,
   buildConfluenceAttachmentCandidates,
+  matchConfluencePageAttachments,
   ConfluencePage,
   ConfluenceSpaceInfo,
 } from '../utils/confluence-parser';
@@ -247,26 +248,11 @@ export class ConfluenceImportService {
             );
 
             // Build attachment info for this page
-            const pageAttachments: AttachmentInfo[] = [];
-            for (const att of confPage.attachments) {
-              // Find the actual file path in attachments directory
-              for (const [relPath, absPath] of attachmentCandidates.entries()) {
-                const fileName = path.basename(relPath);
-                // Match by attachment ID or filename
-                if (
-                  relPath.includes(`/${att.id}`) ||
-                  relPath.includes(`/${att.id}.`) ||
-                  fileName === att.fileName
-                ) {
-                  pageAttachments.push({
-                    href: relPath,
-                    fileName: att.fileName,
-                    mimeType: att.mimeType,
-                  });
-                  break;
-                }
-              }
-            }
+            const pageAttachments: AttachmentInfo[] =
+              matchConfluencePageAttachments(
+                confPage.attachments,
+                attachmentCandidates,
+              );
 
             // Build attachment path map for resolving links
             const attachmentPathMap = new Map<string, string>();
@@ -605,24 +591,11 @@ export class ConfluenceImportService {
             );
 
             // Build attachment info for this page
-            const pageAttachments: AttachmentInfo[] = [];
-            for (const att of confPage.attachments) {
-              for (const [relPath, absPath] of attachmentCandidates.entries()) {
-                const fileName = path.basename(relPath);
-                if (
-                  relPath.includes(`/${att.id}`) ||
-                  relPath.includes(`/${att.id}.`) ||
-                  fileName === att.fileName
-                ) {
-                  pageAttachments.push({
-                    href: relPath,
-                    fileName: att.fileName,
-                    mimeType: att.mimeType,
-                  });
-                  break;
-                }
-              }
-            }
+            const pageAttachments: AttachmentInfo[] =
+              matchConfluencePageAttachments(
+                confPage.attachments,
+                attachmentCandidates,
+              );
 
             const attachmentPathMap = new Map<string, string>();
             for (const att of pageAttachments) {

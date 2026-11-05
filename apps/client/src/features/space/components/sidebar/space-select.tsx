@@ -6,6 +6,7 @@ import { ISpace } from "../../types/space.types";
 import { useTranslation } from "react-i18next";
 import { CustomAvatar } from "@/components/ui/custom-avatar.tsx";
 import { AvatarIconType } from "@/features/attachments/types/attachment.types.ts";
+import { isArchivedSpace } from "@/features/space/utils/archived-space.ts";
 
 interface SpaceSelectProps {
   onChange: (value: ISpace) => void;
@@ -17,7 +18,11 @@ interface SpaceSelectProps {
 }
 
 const renderSelectOption: SelectProps["renderOption"] = ({ option }) => (
-  <Group gap="sm" wrap="nowrap">
+  <Group
+    gap="sm"
+    wrap="nowrap"
+    style={isArchivedSpace({ name: option.label }) ? { opacity: 0.7 } : undefined}
+  >
     <CustomAvatar
       name={option.label}
       avatarUrl={option?.["icon"]}
@@ -71,9 +76,21 @@ export function SpaceSelect({
     }
   }, [spaces]);
 
+  // Archived spaces ("Archive: ..." names) are listed last in their own group.
+  const archivedOptions = data.filter((option) =>
+    isArchivedSpace({ name: option.label }),
+  );
+  const selectData =
+    archivedOptions.length > 0
+      ? [
+          ...data.filter((option) => !isArchivedSpace({ name: option.label })),
+          { group: t("Archived"), items: archivedOptions },
+        ]
+      : data;
+
   return (
     <Select
-      data={data}
+      data={selectData}
       renderOption={renderSelectOption}
       maxDropdownHeight={300}
       //label={label || 'Select space'}

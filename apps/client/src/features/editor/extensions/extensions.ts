@@ -49,15 +49,17 @@ import {
   userColors,
 } from "@/features/editor/extensions/utils.ts";
 import { IUser } from "@/features/user/types/user.types.ts";
-import MathInlineView from "@/features/editor/components/math/math-inline.tsx";
-import MathBlockView from "@/features/editor/components/math/math-block.tsx";
 import ImageView from "@/features/editor/components/image/image-view.tsx";
 import CalloutView from "@/features/editor/components/callout/callout-view.tsx";
 import VideoView from "@/features/editor/components/video/video-view.tsx";
 import AttachmentView from "@/features/editor/components/attachment/attachment-view.tsx";
 import CodeBlockView from "@/features/editor/components/code-block/code-block-view.tsx";
-import DrawioView from "../components/drawio/drawio-view";
-import ExcalidrawView from "@/features/editor/components/excalidraw/excalidraw-view.tsx";
+import {
+  LazyDrawioView as DrawioView,
+  LazyExcalidrawView as ExcalidrawView,
+  LazyMathBlockView as MathBlockView,
+  LazyMathInlineView as MathInlineView,
+} from "@/features/editor/components/lazy-node-views.tsx";
 import EmbedView from "@/features/editor/components/embed/embed-view.tsx";
 import SubpagesView from "@/features/editor/components/subpages/subpages-view.tsx";
 import { common, createLowlight } from "lowlight";

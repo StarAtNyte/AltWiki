@@ -1,24 +1,33 @@
 import React from "react";
 import {
-  Group,
-  Center,
-  Text,
-  Badge,
   ActionIcon,
   Tooltip,
   getDefaultZIndex,
 } from "@mantine/core";
 import { Spotlight } from "@mantine/spotlight";
 import { Link } from "react-router-dom";
-import { IconFile, IconDownload } from "@tabler/icons-react";
+import { IconFile, IconDownload, IconFileText } from "@tabler/icons-react";
 import { buildPageUrl } from "@/features/page/page.utils";
-import { getPageIcon } from "@/lib";
+import { getSpaceColor } from "@/lib/space-color.ts";
+import { spotlightClasses as classes } from "./spotlight-classes.ts";
 import {
   IAttachmentSearch,
   IPageSearch,
 } from "@/features/search/types/search.types";
 import DOMPurify from "dompurify";
 import { useTranslation } from "react-i18next";
+
+function SpaceTag({ space }: { space: { id?: string; name?: string } }) {
+  const color = getSpaceColor(space);
+  return (
+    <span
+      className={classes.tag}
+      style={{ background: color.tagBg, color: color.tagText }}
+    >
+      {space.name}
+    </span>
+  );
+}
 
 interface SearchResultItemProps {
   result: IPageSearch | IAttachmentSearch;
@@ -54,21 +63,25 @@ export function SearchResultItem({
         )}
         style={{ userSelect: "none" }}
       >
-        <Group wrap="nowrap" w="100%">
-          <Center>
-            <IconFile size={16} />
-          </Center>
+        <div className={classes.row}>
+          <span className={classes.rowIcon} aria-hidden>
+            <IconFile size={18} stroke={1.5} />
+          </span>
 
-          <div style={{ flex: 1 }}>
-            <Text>{attachmentResult.fileName}</Text>
-            <Text size="xs" opacity={0.6}>
-              {attachmentResult.space.name} • {attachmentResult.page.title}
-            </Text>
+          <div className={classes.rowBody}>
+            <span className={classes.rowLine}>
+              <span className={classes.rowTitle}>
+                {attachmentResult.fileName}
+              </span>
+              {attachmentResult.space?.name && (
+                <SpaceTag space={attachmentResult.space} />
+              )}
+            </span>
+            <span className={classes.meta}>{attachmentResult.page.title}</span>
 
             {attachmentResult?.highlight && (
-              <Text
-                opacity={0.6}
-                size="xs"
+              <div
+                className={classes.meta}
                 dangerouslySetInnerHTML={{
                   __html: DOMPurify.sanitize(attachmentResult.highlight, {
                     ALLOWED_TAGS: ["mark", "em", "strong", "b"],
@@ -85,10 +98,10 @@ export function SearchResultItem({
             withArrow
           >
             <ActionIcon variant="subtle" color="gray" onClick={handleDownload}>
-              <IconDownload size={18} />
+              <IconDownload size={18} stroke={1.5} />
             </ActionIcon>
           </Tooltip>
-        </Group>
+        </div>
       </Spotlight.Action>
     );
   } else {
@@ -104,22 +117,24 @@ export function SearchResultItem({
         )}
         style={{ userSelect: "none" }}
       >
-        <Group wrap="nowrap" w="100%">
-          <Center>{getPageIcon(pageResult?.icon)}</Center>
+        <div className={classes.row}>
+          <span className={classes.rowIcon} aria-hidden>
+            {pageResult?.icon || <IconFileText size={18} stroke={1.5} />}
+          </span>
 
-          <div style={{ flex: 1 }}>
-            <Text>{pageResult.title}</Text>
-
-            {showSpace && pageResult.space && (
-              <Badge variant="light" size="xs" color="gray">
-                {pageResult.space.name}
-              </Badge>
-            )}
+          <div className={classes.rowBody}>
+            <span className={classes.rowLine}>
+              <span className={classes.rowTitle}>
+                {pageResult.title || t("Untitled")}
+              </span>
+              {showSpace && pageResult.space?.name && (
+                <SpaceTag space={pageResult.space} />
+              )}
+            </span>
 
             {pageResult?.highlight && (
-              <Text
-                opacity={0.6}
-                size="xs"
+              <div
+                className={classes.meta}
                 dangerouslySetInnerHTML={{
                   __html: DOMPurify.sanitize(pageResult.highlight, {
                     ALLOWED_TAGS: ["mark", "em", "strong", "b"],
@@ -129,7 +144,7 @@ export function SearchResultItem({
               />
             )}
           </div>
-        </Group>
+        </div>
       </Spotlight.Action>
     );
   }

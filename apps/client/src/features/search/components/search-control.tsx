@@ -14,10 +14,31 @@ import classes from "./search-control.module.css";
 import React from "react";
 import { useTranslation } from "react-i18next";
 
-interface SearchControlProps extends BoxProps, ElementProps<"button"> {}
+interface SearchControlProps extends BoxProps, ElementProps<"button"> {
+  /** "pill": 44px glass pill used in the app header. */
+  variant?: "default" | "pill";
+}
 
-export function SearchControl({ className, ...others }: SearchControlProps) {
+export function SearchControl({
+  className,
+  variant = "default",
+  ...others
+}: SearchControlProps) {
   const { t } = useTranslation();
+
+  if (variant === "pill") {
+    return (
+      <UnstyledButton
+        {...others}
+        className={cx(classes.pill, className)}
+        aria-label={t("Search")}
+      >
+        <IconSearch size={18} stroke={1.6} className={classes.pillIcon} />
+        <span className={classes.pillText}>{t("Search anything…")}</span>
+        <span className={classes.pillKbd}>Ctrl + K</span>
+      </UnstyledButton>
+    );
+  }
 
   return (
     <UnstyledButton {...others} className={cx(classes.root, className)}>
@@ -44,10 +65,12 @@ export function SearchMobileControl({ onSearch }: SearchMobileControlProps) {
   return (
     <Tooltip label={t("Search")} withArrow>
       <ActionIcon
-        variant="default"
-        style={{ border: "none" }}
+        variant="subtle"
+        color="gray"
+        c="var(--app-ink, inherit)"
         onClick={onSearch}
-        size="sm"
+        size="md"
+        aria-label={t("Search")}
       >
         <IconSearch size={20} stroke={2} />
       </ActionIcon>

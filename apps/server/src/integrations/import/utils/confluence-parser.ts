@@ -2,11 +2,80 @@ import { Logger } from '@nestjs/common';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { load } from 'cheerio';
+import * as mime from 'mime-types';
 
 export interface ConfluenceAttachment {
   id: string;
   fileName: string;
   mimeType: string;
+  /** Attachment version; in XML exports the file on disk is named after it. */
+  version?: string;
+}
+
+/**
+ * Resolves the MIME type of a Confluence attachment. XML exports keep it in a
+ * MEDIA_TYPE ContentProperty (older exports used a contentType property);
+ * fall back to the title's extension.
+ */
+export function resolveConfluenceMimeType(
+  fileName: string,
+  declared?: string | null,
+): string {
+  if (declared && declared !== 'application/octet-stream') {
+    return declared;
+  }
+  return (fileName && mime.lookup(fileName)) || 'application/octet-stream';
+}
+
+/**
+ * Matches the attachments declared for a page against the files present in
+ * the export. XML exports store files as
+ * attachments/{pageId}/{attachmentId}/{version}; HTML exports use
+ * attachments/{pageId}/{attachmentId}.{ext}. Path segments are compared
+ * exactly so that one id never matches a longer id that starts with it.
+ */
+export function matchConfluencePageAttachments(
+  attachments: ConfluenceAttachment[],
+  attachmentCandidates: Map<string, string>,
+): { href: string; fileName: string; mimeType: string }[] {
+  const result: { href: string; fileName: string; mimeType: string }[] = [];
+  const relPaths = Array.from(attachmentCandidates.keys());
+
+  for (const att of attachments) {
+    const matches = relPaths.filter((relPath) => {
+      const segments = relPath.split('/');
+      const last = segments[segments.length - 1];
+      return (
+        segments.slice(0, -1).includes(att.id) ||
+        last === att.id ||
+        last.startsWith(`${att.id}.`)
+      );
+    });
+
+    let href: string | undefined;
+    if (matches.length > 0) {
+      // Prefer the exact version, otherwise the highest numeric version.
+      href =
+        matches.find((m) => att.version && m.endsWith(`/${att.id}/${att.version}`)) ??
+        matches.sort((a, b) => {
+          const va = parseInt(a.split('/').pop() || '', 10) || 0;
+          const vb = parseInt(b.split('/').pop() || '', 10) || 0;
+          return vb - va;
+        })[0];
+    } else {
+      href = relPaths.find((relPath) => path.basename(relPath) === att.fileName);
+    }
+
+    if (href) {
+      result.push({
+        href,
+        fileName: att.fileName,
+        mimeType: resolveConfluenceMimeType(att.fileName, att.mimeType),
+      });
+    }
+  }
+
+  return result;
 }
 
 export interface ConfluencePage {
@@ -33,6 +102,22 @@ export interface ConfluenceParseResult {
 }
 
 const logger = new Logger('ConfluenceParser');
+
+/**
+ * Confluence exports nest CDATA sections: the outer CDATA wraps the body
+ * property, and inner CDATA sections wrap code macro content. To avoid
+ * prematurely closing the outer CDATA, Confluence writes the inner closing
+ * token as "]] >" (with a space). When the body string is later parsed as
+ * standalone XHTML, that broken closer never terminates the inner CDATA,
+ * causing all subsequent text to be consumed as part of the code block.
+ * This function normalizes those sequences back to proper "]]>" closers.
+ */
+function normalizeConfluenceCdata(body: string): string {
+  return body.replace(
+    /\]\]\s+>(\s*<\/ac:(?:plain-text-body|rich-text-body)\s*>)/gi,
+    ']]>$1',
+  );
+}
 
 /**
  * Parses a Confluence Space Export entities.xml file to extract pages,
@@ -62,8 +147,12 @@ export async function parseConfluenceExport(
   // Map from attachment ID to attachment metadata
   const attachmentMap = new Map<
     string,
-    { fileName: string; mimeType: string; pageId: string }
+    { fileName: string; mimeType: string; pageId: string; version: string }
   >();
+
+  // Map from ContentProperty ID to its name/value. Attachments reference
+  // these for MEDIA_TYPE (the real MIME type) in XML exports.
+  const contentPropertyMap = new Map<string, { name: string; value: string }>();
 
   // Map from BodyContent ID to body content (HTML)
   // BodyContent objects are stored separately from Page objects
@@ -100,18 +189,51 @@ export async function parseConfluenceExport(
     // bodyType 2 = storage format (XHTML), which is what we want
     // bodyType 1 = other formats (e.g., "full-width" layout hints)
     if (id && body && bodyType === '2') {
-      bodyContentMap.set(id, body);
+      bodyContentMap.set(id, normalizeConfluenceCdata(body));
     }
   });
 
   logger.debug(`Found ${bodyContentMap.size} BodyContent objects with storage format`);
+
+  $('object[class="ContentProperty"]').each((_, el) => {
+    const $obj = $(el);
+    const id = getPropertyValue($, $obj, 'id');
+    const name = getPropertyValue($, $obj, 'name');
+    if (id && name) {
+      contentPropertyMap.set(id, {
+        name,
+        value: getPropertyValue($, $obj, 'stringValue') || '',
+      });
+    }
+  });
 
   // Second pass: collect all attachments
   $('object[class="Attachment"]').each((_, el) => {
     const $obj = $(el);
     const id = getPropertyValue($, $obj, 'id');
     const title = getPropertyValue($, $obj, 'title');
-    const contentType = getPropertyValue($, $obj, 'contentType');
+
+    // Skip historical versions; their data lives under the current
+    // attachment's folder.
+    if (getIdPropertyValue($, $obj, 'originalVersion')) {
+      return;
+    }
+    const contentStatus = getPropertyValue($, $obj, 'contentStatus');
+    if (contentStatus && contentStatus !== 'current') {
+      return;
+    }
+
+    let contentType = getPropertyValue($, $obj, 'contentType');
+    if (!contentType) {
+      $obj
+        .find('> collection[name="contentProperties"] > element > id')
+        .each((_, idEl) => {
+          const prop = contentPropertyMap.get($(idEl).text().trim());
+          if (prop?.name === 'MEDIA_TYPE' && prop.value) {
+            contentType = prop.value;
+          }
+        });
+    }
 
     // Get the container (page) ID - attachments are associated with pages
     const containerId = getIdPropertyValue($, $obj, 'containerContent');
@@ -119,8 +241,9 @@ export async function parseConfluenceExport(
     if (id && title) {
       attachmentMap.set(id, {
         fileName: title,
-        mimeType: contentType || 'application/octet-stream',
+        mimeType: resolveConfluenceMimeType(title, contentType),
         pageId: containerId || '',
+        version: getPropertyValue($, $obj, 'version') || '',
       });
     }
   });
@@ -173,6 +296,7 @@ export async function parseConfluenceExport(
           id: attId,
           fileName: attInfo.fileName,
           mimeType: attInfo.mimeType,
+          version: attInfo.version,
         });
       }
     });
@@ -187,6 +311,7 @@ export async function parseConfluenceExport(
           id: attId,
           fileName: attInfo.fileName,
           mimeType: attInfo.mimeType,
+          version: attInfo.version,
         });
       }
     });

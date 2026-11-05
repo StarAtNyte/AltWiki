@@ -13,6 +13,7 @@ import {
 } from "@/features/space/permissions/permissions.type.ts";
 import { useTranslation } from "react-i18next";
 import React from "react";
+import SubpagesSection from "@/features/page/components/subpages-section/subpages-section.tsx";
 
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
@@ -32,6 +33,14 @@ export default function Page() {
 
   const spaceRules = space?.membership?.permissions;
   const spaceAbility = useSpaceAbility(spaceRules);
+
+  // Mount the editor one commit after the page itself. This route is lazy, so
+  // its first render runs in React's interruptible retry lane, where
+  // creating the TipTap editor during render (immediatelyRender) keeps
+  // restarting the render and the page never appears. A state update from an
+  // effect renders synchronously.
+  const [editorMounted, setEditorMounted] = React.useState(false);
+  React.useEffect(() => setEditorMounted(true), []);
 
   if (isLoading) {
     return <></>;
@@ -62,17 +71,26 @@ export default function Page() {
           )}
         />
 
-        <MemoizedFullEditor
-          key={page.id}
+        {editorMounted && (
+          <MemoizedFullEditor
+            key={page.id}
+            pageId={page.id}
+            title={page.title}
+            content={page.content}
+            slugId={page.slugId}
+            spaceSlug={page?.space?.slug}
+            editable={spaceAbility.can(
+              SpaceCaslAction.Manage,
+              SpaceCaslSubject.Page,
+            )}
+          />
+        )}
+        <SubpagesSection
+          key={`subpages-${page.id}`}
           pageId={page.id}
-          title={page.title}
-          content={page.content}
-          slugId={page.slugId}
+          spaceId={page.spaceId}
           spaceSlug={page?.space?.slug}
-          editable={spaceAbility.can(
-            SpaceCaslAction.Manage,
-            SpaceCaslSubject.Page,
-          )}
+          content={page.content}
         />
         <MemoizedHistoryModal pageId={page.id} />
       </div>

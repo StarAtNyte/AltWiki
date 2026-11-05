@@ -1,96 +1,113 @@
 .navbar {
-    /*background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-8));*/
     height: 100%;
     width: 100%;
-    padding: var(--mantine-spacing-md);
-    padding-top: 0;
     display: flex;
     flex-direction: column;
     user-select: none;
+    min-height: 0;
 }
 
-.section {
-    margin-left: calc(var(--mantine-spacing-md) * -1);
-    margin-right: calc(var(--mantine-spacing-md) * -1);
-    margin-bottom: var(--mantine-spacing-md);
+.header {
+    padding: rem(8px) rem(8px) rem(4px);
+}
 
-    &:not(:last-of-type) {
-        border-bottom: rem(1px) solid light-dark(var(--mantine-color-gray-3), var(--mantine-color-dark-4));
+.spaceButton {
+    display: flex;
+    align-items: center;
+    gap: rem(10px);
+    width: 100%;
+    height: rem(42px);
+    padding: 0 rem(8px);
+    border-radius: var(--mantine-radius-md);
+    transition: background-color var(--app-transition-fast);
+
+    @mixin hover {
+        background-color: var(--app-hover);
     }
+
+    &[data-expanded] {
+        background-color: var(--app-active);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--app-focus-ring);
+        outline-offset: -2px;
+    }
+}
+
+.spaceName {
+    flex: 1;
+    min-width: 0;
+    font-size: rem(14px);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    color: var(--mantine-color-text);
+}
+
+.spaceChevron {
+    flex-shrink: 0;
+    color: var(--app-text-subtle);
+}
+
+.actions {
+    padding: rem(4px) rem(12px) rem(10px);
+}
+
+.newButton {
+    height: rem(32px);
+    font-weight: 500;
+    background-color: var(--app-surface);
+    border-color: var(--app-border);
+}
+
+.newLabel {
+    text-align: left;
+}
+
+.newSection {
+    color: var(--app-text-muted);
+}
+
+.newSection[data-position="right"] {
+    margin-left: auto;
 }
 
 .sectionPages {
-    margin-bottom: 0;
-    overflow-y: hidden;
-
-    .pages {
-        height: 100%;
-        padding-bottom: 26px;
-    }
-}
-
-.menuItems {
-    padding-left: calc(var(--mantine-spacing-md) - var(--mantine-spacing-xs));
-    padding-right: calc(var(--mantine-spacing-md) - var(--mantine-spacing-xs));
-    padding-bottom: var(--mantine-spacing-md);
-}
-
-.menu {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    font-size: var(--mantine-font-size-sm);
-    padding: rem(4px) var(--mantine-spacing-xs);
-    border-radius: var(--mantine-radius-sm);
-    font-weight: 500;
-    color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
-
-    &:hover {
-        background-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-6));
-        color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
-    }
-}
-
-.menuItemInner {
-    display: flex;
-    align-items: center;
     flex: 1;
-}
-
-.menuItemIcon {
-    margin-right: var(--mantine-spacing-sm);
-    color: light-dark(var(--mantine-color-gray-6), var(--mantine-color-dark-2));
-}
-
-.pages {
-    padding-left: calc(var(--mantine-spacing-md) - rem(6px));
-    padding-right: calc(var(--mantine-spacing-md) - rem(6px));
-    padding-bottom: var(--mantine-spacing-md);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--app-border-subtle);
+    padding-top: rem(8px);
 }
 
 .pagesHeader {
-    padding-left: calc(var(--mantine-spacing-md) + rem(2px));
-    padding-right: var(--mantine-spacing-md);
-    margin-bottom: rem(5px);
+    padding: 0 rem(10px) 0 rem(20px);
+    margin-bottom: rem(4px);
+    min-height: rem(24px);
 }
 
-.pageLink {
-    display: block;
-    padding: rem(8px) var(--mantine-spacing-xs);
-    text-decoration: none;
-    border-radius: var(--mantine-radius-sm);
-    font-size: var(--mantine-font-size-xs);
-    color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
-    line-height: 1;
+.pagesLabel {
+    font-size: rem(12px);
     font-weight: 500;
-
-    &:hover {
-        background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
-        color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
-    }
+    color: var(--app-text-muted);
 }
 
-.activeButton {
-    background-color: light-dark(var(--mantine-color-gray-2), var(--mantine-color-dark-6));
-    color: light-dark(var(--mantine-color-gray-7), var(--mantine-color-dark-0));
+.bulkBar {
+    margin: 0 rem(10px) rem(6px);
+    padding: rem(6px) 0 0 rem(4px);
+    border-radius: var(--mantine-radius-md);
+    background: var(--app-hover);
+}
+
+.pages {
+    flex: 1;
+    min-height: 0;
+    padding-left: rem(8px);
+    padding-right: rem(2px);
+    padding-bottom: rem(26px);
+}
+
+.newInner {
+    width: 100%;
 }
