@@ -354,7 +354,38 @@ export class SpaceMemberRepo {
       .selectFrom('spaces')
       .selectAll()
       .select((eb) => [this.spaceRepo.withMemberCount(eb)])
-      .where('id', 'in', this.getUserSpaceIdsQuery(userId));
+      // AltWiki: also list OPEN spaces (visible to all workspace members),
+      // flagged with is_member so the client can offer "Join". Personal spaces
+      // are never listed for non-members. Ordering stays on the cursor fields
+      // (name, id) required by cursor pagination.
+      .select(
+        sql<boolean>`EXISTS (
+          SELECT 1 FROM space_members
+          WHERE space_members.space_id = spaces.id AND space_members.user_id = ${userId}
+          UNION
+          SELECT 1 FROM space_members sm2
+          INNER JOIN group_users ON group_users.group_id = sm2.group_id
+          WHERE sm2.space_id = spaces.id AND group_users.user_id = ${userId}
+        )`.as('is_member'),
+      )
+      .where((eb) =>
+        eb.or([
+          eb('id', 'in', this.getUserSpaceIdsQuery(userId)),
+          eb.and([
+            eb('visibility', '=', 'open'),
+            eb('isPersonal', '=', false),
+            eb('deletedAt', 'is', null),
+            eb(
+              'workspaceId',
+              '=',
+              eb
+                .selectFrom('users')
+                .select('users.workspaceId')
+                .where('users.id', '=', userId),
+            ),
+          ]),
+        ]),
+      );
 
     if (pagination.query) {
       query = query.where((eb) =>

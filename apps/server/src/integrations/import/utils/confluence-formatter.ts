@@ -1,0 +1,702 @@
+import { load, CheerioAPI, Cheerio } from 'cheerio';
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('ConfluenceFormatter');
+
+// Emoticon name to unicode emoji mapping
+const EMOTICON_MAP: Record<string, string> = {
+  smile: '\u{1F642}',
+  sad: '\u{1F641}',
+  cheeky: '\u{1F61B}',
+  laugh: '\u{1F604}',
+  wink: '\u{1F609}',
+  thumbs_up: '\u{1F44D}',
+  thumbs_down: '\u{1F44E}',
+  information: '\u{2139}',
+  tick: '\u{2714}',
+  cross: '\u{274C}',
+  warning: '\u{26A0}',
+  plus: '\u{2795}',
+  minus: '\u{2796}',
+  question: '\u{2753}',
+  light_on: '\u{1F4A1}',
+  light_off: '\u{1F4A1}',
+  yellow_star: '\u{2B50}',
+  red_star: '\u{2B50}',
+  green_star: '\u{2B50}',
+  blue_star: '\u{2B50}',
+  heart: '\u{2764}',
+  broken_heart: '\u{1F494}',
+};
+
+/**
+ * Converts Confluence Storage Format (XHTML with ac:* macros) to standard HTML
+ * that Docmost's editor can understand.
+ */
+export function convertConfluenceContent(
+  content: string,
+  pageId: string,
+  titleToPageId: Map<string, string>,
+): string {
+  if (!content || !content.trim()) {
+    return '';
+  }
+
+  // Wrap content to ensure proper parsing
+  const wrappedContent = `<div>${content}</div>`;
+  const $: CheerioAPI = load(wrappedContent, { xml: true });
+
+  // Process macros in order
+  processCodeMacros($);
+  processCalloutMacros($);
+  processExpandMacros($);
+  processTableOfContents($);
+  processPageLinks($, titleToPageId);
+  processAttachmentImages($, pageId);
+  processMediaMacros($);
+  processAttachmentLinks($, pageId);
+  processEmoticons($);
+  processTaskLists($);
+  processStatusMacros($);
+  processPanelMacros($);
+  processNoFormatMacros($);
+  processLayoutMacros($);
+
+  // Get the inner content without the wrapper div
+  let result = $('div').first().html() || '';
+
+  // Final cleanup: remove any remaining Confluence XML tags that weren't processed
+  result = cleanupConfluenceTags(result);
+
+  return result;
+}
+
+/**
+ * Process ac:structured-macro with name="code"
+ */
+function processCodeMacros($: CheerioAPI): void {
+  $('ac\\:structured-macro[ac\\:name="code"]').each((_, el) => {
+    const $macro = $(el);
+
+    // Get language from parameters
+    let language = '';
+    $macro.find('ac\\:parameter[ac\\:name="language"]').each((_, param) => {
+      language = $(param).text().trim();
+    });
+
+    // Get title if present
+    let title = '';
+    $macro.find('ac\\:parameter[ac\\:name="title"]').each((_, param) => {
+      title = $(param).text().trim();
+    });
+
+    // Get the plain text body - extract raw content including CDATA
+    const $plainTextBody = $macro.find('ac\\:plain-text-body').first();
+    const $richTextBody = $macro.find('ac\\:rich-text-body').first();
+
+    let codeContent = '';
+    if ($plainTextBody.length) {
+      // Get the HTML of the body element and extract just the text content
+      let bodyHtml = $plainTextBody.html() || '';
+
+      // If it's wrapped in CDATA, extract the content
+      if (bodyHtml.includes('<![CDATA[')) {
+        const cdataMatch = bodyHtml.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+        if (cdataMatch) {
+          codeContent = cdataMatch[1];
+        } else {
+          // Fallback to text extraction
+          codeContent = extractTextContent($plainTextBody);
+        }
+      } else {
+        codeContent = extractTextContent($plainTextBody);
+      }
+    } else if ($richTextBody.length) {
+      let bodyHtml = $richTextBody.html() || '';
+
+      if (bodyHtml.includes('<![CDATA[')) {
+        const cdataMatch = bodyHtml.match(/<!\[CDATA\[([\s\S]*?)\]\]>/);
+        if (cdataMatch) {
+          codeContent = cdataMatch[1];
+        } else {
+          codeContent = extractTextContent($richTextBody);
+        }
+      } else {
+        codeContent = extractTextContent($richTextBody);
+      }
+    }
+
+    // Clean up any XML artifacts that might have leaked through
+    codeContent = codeContent
+      .replace(/^\s*\]\]>\s*/, '') // Remove CDATA closing marker at start
+      .replace(/\]\]>\s*$/, '') // Remove CDATA closing marker at end
+      .replace(/\]\]\s*>\s*$/, '') // Remove CDATA with space before >
+      .replace(/<!\[CDATA\[/g, '') // Remove CDATA opening markers
+      .trim();
+
+    // Create code block
+    const $pre = $('<pre>');
+    const $code = $('<code>');
+    if (language) {
+      $code.addClass(`language-${language.toLowerCase()}`);
+    }
+    $code.text(codeContent);
+    $pre.append($code);
+
+    $macro.replaceWith($pre);
+  });
+}
+
+/**
+ * Helper function to extract text content from an element, handling CDATA properly
+ */
+function extractTextContent($element: Cheerio<any>): string {
+  if (!$element.length) return '';
+
+  // Get all child nodes including text nodes and CDATA
+  const contents = $element.contents();
+  let text = '';
+
+  contents.each((_, node: any) => {
+    if (node.type === 'text' || node.type === 'cdata') {
+      text += (node.data || node.nodeValue || '');
+    }
+  });
+
+  // Fallback to .text() if no content was found
+  return text || $element.text();
+}
+
+/**
+ * Process callout macros (info, warning, note, tip)
+ */
+function processCalloutMacros($: CheerioAPI): void {
+  const calloutTypes: Record<string, string> = {
+    info: 'info',
+    warning: 'warning',
+    note: 'info',
+    tip: 'success',
+    error: 'danger',
+  };
+
+  for (const [macroName, calloutType] of Object.entries(calloutTypes)) {
+    $(`ac\\:structured-macro[ac\\:name="${macroName}"]`).each((_, el) => {
+      const $macro = $(el);
+
+      // Get rich text body content
+      const $body = $macro.find('ac\\:rich-text-body');
+      const bodyHtml = $body.html() || '';
+
+      // Create callout div
+      const $callout = $('<div>')
+        .attr('data-type', 'callout')
+        .attr('data-callout-type', calloutType);
+
+      // Parse and append the body content
+      const bodyContent = load(bodyHtml, { xml: true });
+      $callout.append(bodyContent.root().children());
+
+      $macro.replaceWith($callout);
+    });
+  }
+}
+
+/**
+ * Process panel macros
+ */
+function processPanelMacros($: CheerioAPI): void {
+  $('ac\\:structured-macro[ac\\:name="panel"]').each((_, el) => {
+    const $macro = $(el);
+
+    // Get rich text body content
+    const $body = $macro.find('ac\\:rich-text-body');
+    const bodyHtml = $body.html() || '';
+
+    // Create callout div (panels become callouts)
+    const $callout = $('<div>')
+      .attr('data-type', 'callout')
+      .attr('data-callout-type', 'info');
+
+    const bodyContent = load(bodyHtml, { xml: true });
+    $callout.append(bodyContent.root().children());
+
+    $macro.replaceWith($callout);
+  });
+}
+
+/**
+ * Process expand/collapse macros
+ */
+function processExpandMacros($: CheerioAPI): void {
+  $('ac\\:structured-macro[ac\\:name="expand"]').each((_, el) => {
+    const $macro = $(el);
+
+    // Get title parameter
+    let title = 'Click to expand...';
+    $macro.find('ac\\:parameter[ac\\:name="title"]').each((_, param) => {
+      title = $(param).text().trim() || title;
+    });
+
+    // Get rich text body content
+    const $body = $macro.find('ac\\:rich-text-body');
+    const bodyHtml = $body.html() || '';
+
+    // Create details/summary structure
+    const $details = $('<details>');
+    const $summary = $('<summary>').text(title);
+    $details.append($summary);
+
+    const bodyContent = load(bodyHtml, { xml: true });
+    $details.append(bodyContent.root().children());
+
+    $macro.replaceWith($details);
+  });
+}
+
+/**
+ * Remove table of contents macros (not needed in Docmost)
+ */
+function processTableOfContents($: CheerioAPI): void {
+  $('ac\\:structured-macro[ac\\:name="toc"]').remove();
+  $('ac\\:structured-macro[ac\\:name="toc-zone"]').each((_, el) => {
+    const $macro = $(el);
+    const $body = $macro.find('ac\\:rich-text-body');
+    const bodyHtml = $body.html() || '';
+
+    const bodyContent = load(bodyHtml, { xml: true });
+    $macro.replaceWith(bodyContent.root().children());
+  });
+}
+
+/**
+ * Process internal page links: ac:link with ri:page
+ */
+function processPageLinks(
+  $: CheerioAPI,
+  titleToPageId: Map<string, string>,
+): void {
+  $('ac\\:link').each((_, el) => {
+    const $link = $(el);
+
+    // Check for page reference
+    const $pageRef = $link.find('ri\\:page');
+    if ($pageRef.length) {
+      const pageTitle = $pageRef.attr('ri:content-title') || '';
+
+      // Get link text
+      let linkText =
+        $link.find('ac\\:link-body').text() ||
+        $link.find('ac\\:plain-text-link-body').text() ||
+        pageTitle;
+
+      if (!linkText) {
+        linkText = pageTitle;
+      }
+
+      // Create placeholder link for later resolution
+      // Format: confluence-page:{title}
+      const $anchor = $('<a>')
+        .attr('href', `confluence-page:${pageTitle}`)
+        .text(linkText);
+
+      $link.replaceWith($anchor);
+      return;
+    }
+
+    // Check for attachment reference
+    const $attachmentRef = $link.find('ri\\:attachment');
+    if ($attachmentRef.length) {
+      const fileName = $attachmentRef.attr('ri:filename') || '';
+      const linkText =
+        $link.find('ac\\:link-body').text() ||
+        $link.find('ac\\:plain-text-link-body').text() ||
+        fileName;
+
+      const $anchor = $('<a>')
+        .attr('href', `confluence-attachment:${fileName}`)
+        .attr('data-linked-resource-default-alias', fileName)
+        .text(linkText);
+
+      $link.replaceWith($anchor);
+      return;
+    }
+
+    // Check for URL reference
+    const $urlRef = $link.find('ri\\:url');
+    if ($urlRef.length) {
+      const url = $urlRef.attr('ri:value') || '';
+      const linkText =
+        $link.find('ac\\:link-body').text() ||
+        $link.find('ac\\:plain-text-link-body').text() ||
+        url;
+
+      const $anchor = $('<a>').attr('href', url).text(linkText);
+
+      $link.replaceWith($anchor);
+      return;
+    }
+
+    // Check for user reference
+    const $userRef = $link.find('ri\\:user');
+    if ($userRef.length) {
+      const username = $userRef.attr('ri:username') || '';
+      const linkText =
+        $link.find('ac\\:link-body').text() ||
+        $link.find('ac\\:plain-text-link-body').text() ||
+        `@${username}`;
+
+      const $span = $('<span>').text(linkText);
+      $link.replaceWith($span);
+      return;
+    }
+
+    // Fallback: just extract text content
+    const text = $link.text();
+    $link.replaceWith(text);
+  });
+}
+
+/**
+ * Process attachment images: ac:image with ri:attachment
+ */
+function processAttachmentImages($: CheerioAPI, pageId: string): void {
+  $('ac\\:image').each((_, el) => {
+    const $image = $(el);
+
+    const $attachmentRef = $image.find('ri\\:attachment');
+    if ($attachmentRef.length) {
+      const fileName = $attachmentRef.attr('ri:filename') || '';
+
+      // Create img element with placeholder path
+      // Will be resolved during attachment processing
+      const $img = $('<img>')
+        .attr('src', `confluence-attachment:${fileName}`)
+        .attr('alt', fileName);
+
+      // Preserve width/height if specified
+      const width = $image.attr('ac:width');
+      const height = $image.attr('ac:height');
+      if (width) $img.attr('width', width);
+      if (height) $img.attr('height', height);
+
+      $image.replaceWith($img);
+      return;
+    }
+
+    // Check for URL reference
+    const $urlRef = $image.find('ri\\:url');
+    if ($urlRef.length) {
+      const url = $urlRef.attr('ri:value') || '';
+      const $img = $('<img>').attr('src', url);
+
+      const width = $image.attr('ac:width');
+      const height = $image.attr('ac:height');
+      if (width) $img.attr('width', width);
+      if (height) $img.attr('height', height);
+
+      $image.replaceWith($img);
+    }
+  });
+}
+
+/**
+ * Process multimedia / view-file macros that embed an attachment, e.g.
+ * <ac:structured-macro ac:name="multimedia">
+ *   <ac:parameter ac:name="name"><ri:attachment ri:filename="clip.mp4"/></ac:parameter>
+ * </ac:structured-macro>
+ * They become placeholder links; the attachment import step turns links to
+ * video files into video nodes and everything else into attachment nodes.
+ */
+function processMediaMacros($: CheerioAPI): void {
+  const names = ['multimedia', 'view-file', 'viewfile', 'widget'];
+  const selector = names
+    .flatMap((name) => [
+      `ac\\:structured-macro[ac\\:name="${name}"]`,
+      `ac\\:macro[ac\\:name="${name}"]`,
+    ])
+    .join(', ');
+
+  $(selector).each((_, el) => {
+    const $macro = $(el);
+    const $attachmentRef = $macro.find('ri\\:attachment').first();
+    const fileName = $attachmentRef.attr('ri:filename') || '';
+    if (!fileName) return;
+
+    const $anchor = $('<a>')
+      .attr('href', `confluence-attachment:${fileName}`)
+      .attr('data-linked-resource-default-alias', fileName)
+      .text(fileName);
+
+    $macro.replaceWith($anchor);
+  });
+}
+
+/**
+ * Process attachment links
+ */
+function processAttachmentLinks($: CheerioAPI, pageId: string): void {
+  // Handle direct ri:attachment elements that are not inside ac:link or ac:image
+  $('ri\\:attachment')
+    .filter((_, el) => {
+      const $el = $(el);
+      return !$el.parent('ac\\:link').length && !$el.parent('ac\\:image').length;
+    })
+    .each((_, el) => {
+      const $attachment = $(el);
+      const fileName = $attachment.attr('ri:filename') || '';
+
+      const $anchor = $('<a>')
+        .attr('href', `confluence-attachment:${fileName}`)
+        .attr('data-linked-resource-default-alias', fileName)
+        .text(fileName);
+
+      $attachment.replaceWith($anchor);
+    });
+}
+
+/**
+ * Process emoticons
+ */
+function processEmoticons($: CheerioAPI): void {
+  $('ac\\:emoticon').each((_, el) => {
+    const $emoticon = $(el);
+    const name = $emoticon.attr('ac:name') || '';
+
+    const emoji = EMOTICON_MAP[name] || '\u{1F642}'; // Default to smile
+    $emoticon.replaceWith(emoji);
+  });
+}
+
+/**
+ * Process task lists
+ */
+function processTaskLists($: CheerioAPI): void {
+  $('ac\\:task-list').each((_, el) => {
+    const $taskList = $(el);
+
+    const $ul = $('<ul>').attr('data-type', 'taskList');
+
+    $taskList.find('ac\\:task').each((_, taskEl) => {
+      const $task = $(taskEl);
+
+      const status = $task.find('ac\\:task-status').text().trim();
+      const isChecked = status === 'complete';
+      const bodyHtml = $task.find('ac\\:task-body').html() || '';
+
+      const $li = $('<li>')
+        .attr('data-type', 'taskItem')
+        .attr('data-checked', String(isChecked));
+
+      const $label = $('<label>');
+      const $input = $('<input>').attr('type', 'checkbox');
+      if (isChecked) $input.attr('checked', '');
+      $label.append($input);
+      $label.append($('<span>'));
+
+      const $container = $('<div>');
+      const bodyContent = load(bodyHtml, { xml: true });
+      $container.append(bodyContent.root().children());
+
+      $li.append($label);
+      $li.append($container);
+      $ul.append($li);
+    });
+
+    $taskList.replaceWith($ul);
+  });
+}
+
+/**
+ * Process status macros
+ */
+function processStatusMacros($: CheerioAPI): void {
+  $('ac\\:structured-macro[ac\\:name="status"]').each((_, el) => {
+    const $macro = $(el);
+
+    let title = '';
+    $macro.find('ac\\:parameter[ac\\:name="title"]').each((_, param) => {
+      title = $(param).text().trim();
+    });
+
+    // Convert status to a styled span
+    const $span = $('<span>')
+      .attr('data-type', 'status')
+      .text(title || 'Status');
+
+    $macro.replaceWith($span);
+  });
+}
+
+/**
+ * Process noformat macros (preformatted text)
+ */
+function processNoFormatMacros($: CheerioAPI): void {
+  $('ac\\:structured-macro[ac\\:name="noformat"]').each((_, el) => {
+    const $macro = $(el);
+
+    const $plainTextBody = $macro.find('ac\\:plain-text-body').first();
+    const $richTextBody = $macro.find('ac\\:rich-text-body').first();
+
+    let content = '';
+    if ($plainTextBody.length) {
+      content = extractTextContent($plainTextBody);
+    } else if ($richTextBody.length) {
+      content = extractTextContent($richTextBody);
+    }
+
+    // Clean up any XML artifacts
+    content = content
+      .replace(/^\s*\]\]>\s*/, '')
+      .replace(/\]\]>\s*$/, '')
+      .replace(/<!\[CDATA\[/g, '')
+      .trim();
+
+    const $pre = $('<pre>');
+    const $code = $('<code>').text(content);
+    $pre.append($code);
+
+    $macro.replaceWith($pre);
+  });
+}
+
+/**
+ * Process layout macros - extract content and flatten
+ */
+function processLayoutMacros($: CheerioAPI): void {
+  // Process layout sections
+  $('ac\\:layout-section').each((_, el) => {
+    const $section = $(el);
+    const $cells = $section.find('ac\\:layout-cell');
+
+    const $wrapper = $('<div>');
+    $cells.each((_, cellEl) => {
+      const $cell = $(cellEl);
+      const cellHtml = $cell.html() || '';
+      const cellContent = load(cellHtml, { xml: true });
+      $wrapper.append(cellContent.root().children());
+    });
+
+    $section.replaceWith($wrapper.children());
+  });
+
+  // Process standalone layout elements
+  $('ac\\:layout').each((_, el) => {
+    const $layout = $(el);
+    const layoutHtml = $layout.html() || '';
+    const layoutContent = load(layoutHtml, { xml: true });
+    $layout.replaceWith(layoutContent.root().children());
+  });
+}
+
+/**
+ * Removes any remaining Confluence-specific XML tags and attributes
+ */
+function cleanupConfluenceTags(html: string): string {
+  // Remove any remaining ac:*, ri:* and other Confluence XML tags
+  // These regex patterns handle both self-closing and paired tags
+  let cleaned = html;
+
+  // First, remove CDATA closing markers with optional space and following XML closing tags
+  // Pattern: ]] > or ]]> followed by </ac:plain-text-body> or similar
+  cleaned = cleaned.replace(/\]\]\s*>\s*<\/ac:plain-text-body>/gi, '');
+  cleaned = cleaned.replace(/\]\]\s*>\s*<\/ac:rich-text-body>/gi, '');
+
+  // Remove any standalone CDATA markers
+  cleaned = cleaned.replace(/<!\[CDATA\[/g, '');
+  cleaned = cleaned.replace(/\]\]>/g, '');
+
+  // Remove all Confluence namespace tags (ac:*, ri:*, at:*)
+  // This handles both opening and closing tags with any attributes
+  cleaned = cleaned.replace(/<\/?ac:[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<\/?ri:[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<\/?at:[^>]*>/gi, '');
+
+  // Remove Confluence-specific attributes from remaining tags
+  cleaned = cleaned.replace(/\s+ac:[a-z-]+="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ri:[a-z-]+="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+local-id="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ac:name="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ac:schema-version="[^"]*"/gi, '');
+  cleaned = cleaned.replace(/\s+ac:macro-id="[^"]*"/gi, '');
+
+  // Clean up any double spaces or empty attributes left behind
+  cleaned = cleaned.replace(/\s{2,}/g, ' ');
+  cleaned = cleaned.replace(/\s+>/g, '>');
+
+  // Remove any orphaned closing tags
+  cleaned = cleaned.replace(/<\/ac:[^>]+>/gi, '');
+  cleaned = cleaned.replace(/<\/ri:[^>]+>/gi, '');
+
+  return cleaned;
+}
+
+/**
+ * Resolves confluence-page: and confluence-attachment: placeholder links
+ * to actual page mentions and attachment paths.
+ */
+export function resolveConfluenceLinks(
+  html: string,
+  pageId: string,
+  titleToNewPageId: Map<string, { id: string; slugId: string }>,
+  attachmentPathMap: Map<string, string>,
+): string {
+  const $ = load(html);
+
+  // Resolve page links
+  $('a[href^="confluence-page:"]').each((_, el) => {
+    const $a = $(el);
+    const href = $a.attr('href') || '';
+    const pageTitle = href.replace('confluence-page:', '');
+    const pageMeta = titleToNewPageId.get(pageTitle);
+
+    if (pageMeta) {
+      // Will be converted to mention later by formatImportHtml
+      $a.attr('href', `page:${pageMeta.id}`);
+    } else {
+      // Page not found, convert to plain text
+      $a.replaceWith($a.text());
+    }
+  });
+
+  // Resolve attachment links
+  $('a[href^="confluence-attachment:"]').each((_, el) => {
+    const $a = $(el);
+    const href = $a.attr('href') || '';
+    const fileName = href.replace('confluence-attachment:', '');
+
+    // Try to find attachment path (key is fileName, value is the actual path/href)
+    let resolvedPath: string | null = null;
+    for (const [key, value] of attachmentPathMap.entries()) {
+      if (key.endsWith(`/${fileName}`) || key === fileName) {
+        resolvedPath = value;
+        break;
+      }
+    }
+
+    if (resolvedPath) {
+      $a.attr('href', resolvedPath);
+    }
+  });
+
+  // Resolve attachment images
+  $('img[src^="confluence-attachment:"]').each((_, el) => {
+    const $img = $(el);
+    const src = $img.attr('src') || '';
+    const fileName = src.replace('confluence-attachment:', '');
+
+    // Try to find attachment path (key is fileName, value is the actual path/href)
+    let resolvedPath: string | null = null;
+    for (const [key, value] of attachmentPathMap.entries()) {
+      if (key.endsWith(`/${fileName}`) || key === fileName) {
+        resolvedPath = value;
+        break;
+      }
+    }
+
+    if (resolvedPath) {
+      $img.attr('src', resolvedPath);
+    }
+  });
+
+  return $.html();
+}

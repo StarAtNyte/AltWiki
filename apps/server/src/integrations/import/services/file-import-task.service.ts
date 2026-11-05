@@ -29,10 +29,11 @@ import {
   readDocmostMetadata,
   stripNotionID,
 } from '../utils/import.utils';
+import { extractTextFromPdf } from '../utils/pdf.utils';
 import { executeTx } from '@docmost/db/utils';
 import { BacklinkRepo } from '@docmost/db/repos/backlink/backlink.repo';
 import { ImportAttachmentService } from './import-attachment.service';
-import { ModuleRef } from '@nestjs/core';
+import { ConfluenceImportService } from './confluence-import.service';
 import { PageService } from '../../../core/page/services/page.service';
 import { ImportPageNode } from '../dto/file-task-dto';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -54,7 +55,7 @@ export class FileImportTaskService {
     private readonly backlinkRepo: BacklinkRepo,
     @InjectKysely() private readonly db: KyselyDB,
     private readonly importAttachmentService: ImportAttachmentService,
-    private moduleRef: ModuleRef,
+    private readonly confluenceImportService: ConfluenceImportService,
     private eventEmitter: EventEmitter2,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
@@ -80,9 +81,13 @@ export class FileImportTaskService {
       return;
     }
 
-    const { path: tmpZipPath, cleanup: cleanupTmpFile } = await tmp.file({
+    // Determine file extension
+    const fileExt = `.${fileTask.fileExt}`;
+    const isZipFile = fileExt === '.zip';
+
+    const { path: tmpFilePath, cleanup: cleanupTmpFile } = await tmp.file({
       prefix: 'docmost-import',
-      postfix: '.zip',
+      postfix: fileExt,
       discardDescriptor: true,
     });
 
@@ -95,8 +100,16 @@ export class FileImportTaskService {
       const fileStream = await this.storageService.readStream(
         fileTask.filePath,
       );
-      await pipeline(fileStream, createWriteStream(tmpZipPath));
-      await extractZip(tmpZipPath, tmpExtractDir);
+      await pipeline(fileStream, createWriteStream(tmpFilePath));
+
+      if (isZipFile) {
+        // Extract ZIP file
+        await extractZip(tmpFilePath, tmpExtractDir);
+      } else {
+        // For standalone MD/PDF files, copy to extract directory
+        const targetPath = path.join(tmpExtractDir, fileTask.fileName);
+        await fs.copyFile(tmpFilePath, targetPath);
+      }
     } catch (err) {
       await cleanupTmpFile();
       await cleanupTmpDir();
@@ -116,22 +129,7 @@ export class FileImportTaskService {
       }
 
       if (fileTask.source === FileImportSource.Confluence) {
-        let ConfluenceModule: any;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          ConfluenceModule = require('./../../../ee/confluence-import/confluence-import.service');
-        } catch (err) {
-          this.logger.error(
-            'Confluence import requested but EE module not bundled in this build',
-          );
-          return;
-        }
-        const confluenceImportService = this.moduleRef.get(
-          ConfluenceModule.ConfluenceImportService,
-          { strict: false },
-        );
-
-        await confluenceImportService.processConfluenceImport({
+        await this.confluenceImportService.processConfluenceImport({
           extractDir: tmpExtractDir,
           fileTask,
         });
@@ -481,10 +479,19 @@ export class FileImportTaskService {
             // Check if file exists (placeholder pages won't have physical files)
             try {
               await fs.access(absPath);
-              content = await fs.readFile(absPath, 'utf-8');
 
-              if (page.fileExtension.toLowerCase() === '.md') {
-                content = await markdownToHtml(content);
+              const fileExt = page.fileExtension.toLowerCase();
+
+              if (fileExt === '.pdf') {
+                // Extract text from PDF and convert to HTML
+                content = await extractTextFromPdf(absPath);
+              } else {
+                // Read text content for MD and HTML files
+                content = await fs.readFile(absPath, 'utf-8');
+
+                if (fileExt === '.md') {
+                  content = await markdownToHtml(content);
+                }
               }
             } catch (err: any) {
               if (err?.code === 'ENOENT') {

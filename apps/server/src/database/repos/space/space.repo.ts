@@ -176,7 +176,6 @@ export class SpaceRepo {
     workspaceId: string,
     pagination: PaginationOptions,
   ) {
-    // todo: show spaces user have access based on visibility and memberships
     let query = this.db
       .selectFrom('spaces')
       .selectAll('spaces')

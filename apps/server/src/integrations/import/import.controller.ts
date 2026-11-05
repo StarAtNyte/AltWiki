@@ -12,6 +12,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
+import WorkspaceAbilityFactory from '../../core/casl/abilities/workspace-ability.factory';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -19,6 +20,10 @@ import {
   SpaceCaslAction,
   SpaceCaslSubject,
 } from '../../core/casl/interfaces/space-ability.type';
+import {
+  WorkspaceCaslAction,
+  WorkspaceCaslSubject,
+} from '../../core/casl/interfaces/workspace-ability.type';
 import { FileInterceptor } from '../../common/interceptors/file.interceptor';
 import * as bytes from 'bytes';
 import * as path from 'path';
@@ -38,6 +43,7 @@ export class ImportController {
   constructor(
     private readonly importService: ImportService,
     private readonly spaceAbility: SpaceAbilityFactory,
+    private readonly workspaceAbility: WorkspaceAbilityFactory,
     private readonly environmentService: EnvironmentService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
@@ -130,7 +136,7 @@ export class ImportController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const validFileExtensions = ['.zip'];
+    const validFileExtensions = ['.zip', '.md', '.pdf'];
 
     const maxFileSize = bytes(this.environmentService.getFileImportSizeLimit());
 
@@ -196,5 +202,53 @@ export class ImportController {
       spaceId,
       workspace.id,
     );
+  }
+
+  @UseInterceptors(FileInterceptor)
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @Post('spaces/import-confluence')
+  async importConfluenceSpace(
+    @Req() req: any,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    // Check if user can create spaces in this workspace
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Space)
+    ) {
+      throw new ForbiddenException(
+        'You do not have permission to create spaces',
+      );
+    }
+
+    const maxFileSize = bytes(this.environmentService.getFileImportSizeLimit());
+
+    let file = null;
+    try {
+      file = await req.file({
+        limits: { fileSize: maxFileSize, fields: 1, files: 1 },
+      });
+    } catch (err: any) {
+      this.logger.error(err.message);
+      if (err?.statusCode === 413) {
+        throw new BadRequestException(
+          `File too large. Exceeds the ${this.environmentService.getFileImportSizeLimit()} import limit`,
+        );
+      }
+    }
+
+    if (!file) {
+      throw new BadRequestException('Failed to upload file');
+    }
+
+    if (path.extname(file.filename).toLowerCase() !== '.zip') {
+      throw new BadRequestException(
+        'Invalid file type. Only ZIP files are supported for Confluence space import.',
+      );
+    }
+
+    return this.importService.importConfluenceSpace(file, user, workspace.id);
   }
 }

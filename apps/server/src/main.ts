@@ -25,6 +25,7 @@ const OAUTH_CALLBACK_PATH =
 async function bootstrap() {
   const adapter = new FastifyAdapter({
     trustProxy: true,
+    bodyLimit: 100 * 1024 * 1024, // 100MB
     routerOptions: {
       maxParamLength: 1000,
       ignoreTrailingSlash: true,
@@ -69,7 +70,11 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(redisIoAdapter);
 
-  await app.register(fastifyMultipart);
+  await app.register(fastifyMultipart, {
+    limits: {
+      fileSize: 100 * 1024 * 1024, // 100MB
+    },
+  });
   await app.register(fastifyCookie);
 
   const environmentService = app.get(EnvironmentService);

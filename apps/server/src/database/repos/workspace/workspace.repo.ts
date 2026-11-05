@@ -289,6 +289,27 @@ export class WorkspaceRepo {
       .executeTakeFirst();
   }
 
+  // AltWiki: settings.integrations (e.g. geminiApiKey)
+  async updateIntegrationSettings(
+    workspaceId: string,
+    prefKey: string,
+    prefValue: string | boolean,
+    trx?: KyselyTransaction,
+  ) {
+    const db = dbOrTx(this.db, trx);
+    return db
+      .updateTable('workspaces')
+      .set({
+        settings: sql`COALESCE(settings, '{}'::jsonb)
+                || jsonb_build_object('integrations', COALESCE(settings->'integrations', '{}'::jsonb)
+                || jsonb_build_object('${sql.raw(prefKey)}', ${sql.lit(prefValue)}))`,
+        updatedAt: new Date(),
+      })
+      .where('id', '=', workspaceId)
+      .returning(this.baseFields)
+      .executeTakeFirst();
+  }
+
   async updateSpaceSettings(
     workspaceId: string,
     prefKey: string,
@@ -327,4 +348,15 @@ export class WorkspaceRepo {
       .executeTakeFirst();
   }
 
+  async getIntegrationSetting(
+    workspaceId: string,
+    prefKey: string,
+  ): Promise<string | null> {
+    const result = await this.db
+      .selectFrom('workspaces')
+      .select(sql`settings->'integrations'->>${prefKey}`.as('value'))
+      .where('id', '=', workspaceId)
+      .executeTakeFirst();
+    return result?.value as string | null;
+  }
 }

@@ -23,6 +23,7 @@ import {
   InviteUserDto,
   RevokeInviteDto,
 } from '../dto/invitation.dto';
+import { SyncSpaceOwnersDto } from '../dto/sync-space-owners.dto';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { OAuthScope } from '../../../common/decorators/oauth-scope.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -354,5 +355,22 @@ export class WorkspaceController {
       );
 
     return { inviteLink };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('spaces/sync-owners')
+  async syncOwnersToSpaces(
+    @Body() dto: SyncSpaceOwnersDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)
+    ) {
+      throw new ForbiddenException();
+    }
+
+    return this.workspaceService.syncOwnersToSpaces(workspace.id, dto.spaceId);
   }
 }

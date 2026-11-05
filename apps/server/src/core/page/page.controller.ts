@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Inject,
+  Logger,
   NotFoundException,
   Post,
   UseGuards,
@@ -39,6 +40,12 @@ import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { RecentPageDto } from './dto/recent-page.dto';
 import { CreatedByUserDto } from './dto/created-by-user.dto';
 import { DuplicatePageDto } from './dto/duplicate-page.dto';
+import {
+  BulkDeletePagesDto,
+  BulkDuplicatePagesDto,
+  BulkMovePagesDto,
+  BulkRestorePagesDto,
+} from './dto/bulk-page.dto';
 import { DeletedPageDto } from './dto/deleted-page.dto';
 import { BacklinksListDto } from './dto/backlink.dto';
 import { LabelService } from '../label/label.service';
@@ -57,6 +64,8 @@ import { getPageTitle } from '../../common/helpers';
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
 export class PageController {
+  private readonly logger = new Logger(PageController.name);
+
   constructor(
     private readonly pageService: PageService,
     private readonly pageRepo: PageRepo,
@@ -756,5 +765,106 @@ export class PageController {
     await this.pageAccessService.validateCanView(page, user);
 
     return this.pageService.getPageBreadCrumbs(page.id);
+  }
+
+  /*
+   * AltWiki bulk page operations. Each item is delegated to the matching
+   * single-page handler above so upstream permission checks (space ability +
+   * page-level permissions), audit logging and side effects stay identical.
+   * Failures are counted per item instead of aborting the batch.
+   */
+  private async runBulk<T>(
+    pageIds: string[],
+    op: (pageId: string) => Promise<T>,
+    label: string,
+  ): Promise<{ success: number; failed: number; results: T[] }> {
+    let success = 0;
+    let failed = 0;
+    const results: T[] = [];
+    for (const pageId of pageIds) {
+      try {
+        results.push(await op(pageId));
+        success++;
+      } catch (err: any) {
+        failed++;
+        this.logger.warn(`Bulk ${label} failed for page ${pageId}: ${err?.message}`);
+      }
+    }
+    return { success, failed, results };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/delete')
+  async bulkDelete(
+    @Body() dto: BulkDeletePagesDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const { success, failed } = await this.runBulk(
+      dto.pageIds,
+      (pageId) =>
+        this.delete(
+          { pageId, permanentlyDelete: dto.permanentlyDelete ?? false },
+          user,
+          workspace,
+        ),
+      'delete',
+    );
+    return { success, failed };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/move')
+  async bulkMove(@Body() dto: BulkMovePagesDto, @AuthUser() user: User) {
+    const { success, failed } = await this.runBulk(
+      dto.pageIds,
+      async (pageId) => {
+        const page = await this.pageRepo.findById(pageId);
+        if (!page) throw new NotFoundException('Page not found');
+
+        if (dto.spaceId && dto.spaceId !== page.spaceId) {
+          return this.movePageToSpace({ pageId, spaceId: dto.spaceId }, user);
+        }
+        if (dto.parentPageId !== undefined) {
+          const parentPageId = dto.parentPageId || null;
+          const position = await this.pageService.nextPagePosition(
+            page.spaceId,
+            parentPageId ?? undefined,
+          );
+          return this.movePage({ pageId, parentPageId, position }, user);
+        }
+      },
+      'move',
+    );
+    return { success, failed };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/restore')
+  async bulkRestore(
+    @Body() dto: BulkRestorePagesDto,
+    @AuthUser() user: User,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    const { success, failed } = await this.runBulk(
+      dto.pageIds,
+      (pageId) => this.restore({ pageId }, user, workspace),
+      'restore',
+    );
+    return { success, failed };
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('bulk/duplicate')
+  async bulkDuplicate(
+    @Body() dto: BulkDuplicatePagesDto,
+    @AuthUser() user: User,
+  ) {
+    const { success, failed, results } = await this.runBulk(
+      dto.pageIds,
+      (pageId) => this.duplicatePage({ pageId, spaceId: dto.spaceId }, user),
+      'duplicate',
+    );
+    return { success, failed, duplicatedPages: results };
   }
 }

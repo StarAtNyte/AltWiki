@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { MultipartFile } from '@fastify/multipart';
 import * as path from 'path';
@@ -19,6 +19,7 @@ import { TiptapTransformer } from '@hocuspocus/transformer';
 import * as Y from 'yjs';
 import { markdownToHtml } from '@docmost/editor-ext';
 import {
+  extractZip,
   FileTaskStatus,
   FileTaskType,
   getFileTaskFolderPath,
@@ -31,6 +32,12 @@ import { QueueJob, QueueName } from '../../queue/constants';
 import { ModuleRef } from '@nestjs/core';
 import { load } from 'cheerio';
 import { normalizeImportHtml } from '../utils/import-formatter';
+import { ConfluenceImportService } from './confluence-import.service';
+import { extractTextFromPdfBuffer } from '../utils/pdf.utils';
+import { User } from '@docmost/db/types/entity.types';
+import * as tmp from 'tmp-promise';
+import { pipeline } from 'node:stream/promises';
+import { createWriteStream } from 'node:fs';
 
 @Injectable()
 export class ImportService {
@@ -43,6 +50,8 @@ export class ImportService {
     @InjectQueue(QueueName.FILE_TASK_QUEUE)
     private readonly fileTaskQueue: Queue,
     private moduleRef: ModuleRef,
+    @Inject(forwardRef(() => ConfluenceImportService))
+    private readonly confluenceImportService: ConfluenceImportService,
   ) {}
 
   async importPage(
@@ -207,12 +216,12 @@ export class ImportService {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       PdfImportModule = require('./../../../ee/document-import/pdf-import.service');
     } catch (err) {
-      this.logger.error(
-        'PDF import requested but EE module not bundled in this build',
+      // AltWiki: no EE bundle -> fall back to basic text extraction (pdfjs)
+      this.logger.debug(
+        'EE PDF importer not bundled; using basic PDF text extraction',
       );
-      throw new BadRequestException(
-        'This feature requires a valid enterprise license.',
-      );
+      const html = await extractTextFromPdfBuffer(fileBuffer);
+      return this.processHTML(html);
     }
 
     const pdfImportService = this.moduleRef.get(
@@ -350,7 +359,7 @@ export class ImportService {
         fileName: fileNameWithExt,
         filePath: filePath,
         fileSize: fileSize,
-        fileExt: 'zip',
+        fileExt: fileExtension.slice(1), // Remove the leading dot
         creatorId: userId,
         spaceId: spaceId,
         workspaceId: workspaceId,
@@ -363,5 +372,46 @@ export class ImportService {
     });
 
     return fileTask;
+  }
+
+  async importConfluenceSpace(
+    filePromise: Promise<MultipartFile>,
+    user: User,
+    workspaceId: string,
+  ): Promise<{ spaceId: string; spaceName: string; pageCount: number }> {
+    const file = await filePromise;
+
+    const { path: tmpFilePath, cleanup: cleanupTmpFile } = await tmp.file({
+      prefix: 'docmost-confluence-',
+      postfix: '.zip',
+      discardDescriptor: true,
+    });
+
+    const { path: tmpExtractDir, cleanup: cleanupTmpDir } = await tmp.dir({
+      prefix: 'docmost-confluence-extract-',
+      unsafeCleanup: true,
+    });
+
+    try {
+      // Save uploaded file to temp location
+      await pipeline(file.file, createWriteStream(tmpFilePath));
+
+      // Extract the ZIP
+      await extractZip(tmpFilePath, tmpExtractDir);
+
+      // Process the Confluence space import
+      const result =
+        await this.confluenceImportService.processConfluenceSpaceImport({
+          extractDir: tmpExtractDir,
+          user,
+          workspaceId,
+        });
+
+      return result;
+    } finally {
+      // Cleanup temp files
+      await cleanupTmpFile();
+      await cleanupTmpDir();
+    }
   }
 }

@@ -125,10 +125,20 @@ export class PageService {
     let textContent = undefined;
     let ydoc = undefined;
 
-    if (createPageDto?.content && createPageDto?.format) {
+    // AltWiki legacy alias: markdownContent == { content, format: 'markdown' }
+    const rawContent =
+      createPageDto?.content ?? createPageDto?.markdownContent ?? undefined;
+    const rawFormat: ContentFormat | undefined =
+      createPageDto?.content !== undefined
+        ? createPageDto?.format
+        : createPageDto?.markdownContent
+          ? 'markdown'
+          : undefined;
+
+    if (rawContent && rawFormat) {
       const prosemirrorJson = await this.parseProsemirrorContent(
-        createPageDto.content,
-        createPageDto.format,
+        rawContent,
+        rawFormat,
       );
 
       content = prosemirrorJson;

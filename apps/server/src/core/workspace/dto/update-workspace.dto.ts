@@ -89,4 +89,9 @@ export class UpdateWorkspaceDto extends PartialType(CreateWorkspaceDto) {
   @IsOptional()
   @IsBoolean()
   enforceMcpOauth: boolean;
+
+  // AltWiki: Gemini API key for the GitHub docs generator
+  @IsOptional()
+  @IsString()
+  geminiApiKey: string;
 }

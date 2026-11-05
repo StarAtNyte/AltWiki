@@ -36,8 +36,16 @@ export class UserController {
 
     const { licenseKey, ...rest } = workspace;
 
+    // AltWiki: never expose the Gemini API key to clients
+    const settings = rest.settings as any;
     const workspaceInfo = {
       ...rest,
+      settings: settings?.integrations?.geminiApiKey
+        ? {
+            ...settings,
+            integrations: { ...settings.integrations, geminiApiKey: '••••••••' },
+          }
+        : rest.settings,
       memberCount,
     };
 

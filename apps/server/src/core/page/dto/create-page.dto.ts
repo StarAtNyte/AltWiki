@@ -33,4 +33,10 @@ export class CreatePageDto {
   @Transform(({ value }) => value?.toLowerCase() ?? 'json')
   @IsIn(['json', 'markdown', 'html'])
   format?: ContentFormat = 'json';
+
+  // AltWiki legacy alias: equivalent to { content, format: 'markdown' }.
+  // Kept for the AltWiki client (templates) and github-docs generator.
+  @IsOptional()
+  @IsString()
+  markdownContent?: string;
 }

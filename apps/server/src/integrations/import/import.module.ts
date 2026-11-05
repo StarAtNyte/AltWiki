@@ -5,8 +5,10 @@ import { StorageModule } from '../storage/storage.module';
 import { FileImportTaskService } from './services/file-import-task.service';
 import { FileTaskProcessor } from './processors/file-task.processor';
 import { ImportAttachmentService } from './services/import-attachment.service';
+import { ConfluenceImportService } from './services/confluence-import.service';
 import { FileTaskController } from './file-task.controller';
 import { PageModule } from '../../core/page/page.module';
+import { SpaceModule } from '../../core/space/space.module';
 
 @Module({
   providers: [
@@ -14,9 +16,10 @@ import { PageModule } from '../../core/page/page.module';
     FileImportTaskService,
     FileTaskProcessor,
     ImportAttachmentService,
+    ConfluenceImportService,
   ],
   exports: [ImportService, ImportAttachmentService],
   controllers: [ImportController, FileTaskController],
-  imports: [StorageModule, PageModule],
+  imports: [StorageModule, PageModule, SpaceModule],
 })
 export class ImportModule {}
