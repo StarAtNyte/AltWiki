@@ -8,6 +8,10 @@ import { queryClient } from "@/main.tsx";
 import { SpaceSelect } from "@/features/space/components/sidebar/space-select.tsx";
 import { useNavigate } from "react-router-dom";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
+import { useAtom } from "jotai";
+import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import { treeModel } from "@/features/page/tree/model/tree-model";
+import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 interface MovePageModalProps {
   pageId: string;
@@ -27,12 +31,41 @@ export default function MovePageModal({
   const { t } = useTranslation();
   const [targetSpace, setTargetSpace] = useState<ISpace>(null);
   const navigate = useNavigate();
+  const [treeData, setTreeData] = useAtom(treeDataAtom);
+  const emit = useQueryEmit();
+
+  // AltWiki: drop the moved page (and its subtree) from the cached sidebar
+  // tree of the old space, here and on other clients. Without this the old
+  // space keeps listing it until a full reload.
+  const removeFromOldSpaceTree = () => {
+    const node = treeModel.find(treeData, pageId);
+    if (!node) return;
+    setTreeData((prev) => {
+      let next = treeModel.remove(prev, pageId);
+      const parentId = node.parentPageId;
+      if (parentId) {
+        const parent = treeModel.find(next, parentId);
+        if (parent && (parent.children?.length ?? 0) === 0) {
+          next = treeModel.update(next, parentId, { hasChildren: false });
+        }
+      }
+      return next;
+    });
+    setTimeout(() => {
+      emit({
+        operation: "deleteTreeNode",
+        spaceId: node.spaceId,
+        payload: { node },
+      });
+    }, 50);
+  };
 
   const handlePageMove = async () => {
     if (!targetSpace) return;
 
     try {
       await movePageToSpace({ pageId, spaceId: targetSpace.id });
+      removeFromOldSpaceTree();
       queryClient.removeQueries({
         predicate: (item) =>
           ["pages", "sidebar-pages", "root-sidebar-pages"].includes(
