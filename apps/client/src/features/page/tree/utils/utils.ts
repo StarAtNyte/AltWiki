@@ -20,6 +20,12 @@ function toTimestamp(date: Date | string | undefined): number {
 export function sortTreeNodes(nodes: SpaceTreeNode[], sortOrder: SortOrder): SpaceTreeNode[] {
   const sorted = [...nodes].sort((a, b) => {
     switch (sortOrder) {
+      case "manual": {
+        // Saved drag-and-drop order (fractional position keys).
+        const pa = (a as any).position ?? "";
+        const pb = (b as any).position ?? "";
+        return pa < pb ? -1 : pa > pb ? 1 : 0;
+      }
       case "alphabetical-asc": {
         const nameA = (a.name || "").toLowerCase();
         const nameB = (b.name || "").toLowerCase();

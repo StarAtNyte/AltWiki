@@ -1738,5 +1738,8 @@
   "Page not found": "Page not found",
   "All spaces in your workspace": "All spaces in your workspace",
   "Not configured": "Not configured",
-  "Not configured on this server. Set {{vars}} and restart.": "Not configured on this server. Set {{vars}} and restart."
+  "Not configured on this server. Set {{vars}} and restart.": "Not configured on this server. Set {{vars}} and restart.",
+  "Manual (drag to reorder)": "Manual (drag to reorder)",
+  "Sort switched to manual order so your arrangement is kept": "Sort switched to manual order so your arrangement is kept",
+  "Rename page": "Rename page"
 }

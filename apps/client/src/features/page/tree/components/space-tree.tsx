@@ -1,3 +1,4 @@
+import { notifications } from "@mantine/notifications";
 import { useAtom, useAtomValue } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -50,7 +51,19 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
   } = useGetRootSidebarPagesQuery({ spaceId });
   const [openTreeNodes, setOpenTreeNodes] = useAtom(openTreeNodesAtom);
   // AltWiki: user-selected sidebar sort order (space sidebar menu).
-  const sortOrder = useAtomValue(sortOrderAtom);
+  const [sortOrder, setSortOrder] = useAtom(sortOrderAtom);
+  // Dragging only makes sense in manual order; otherwise the drop is saved
+  // but the list immediately re-sorts by name/date and looks like nothing
+  // happened. Switch to manual order on the first drag.
+  const handleMoveAndKeepOrder: typeof handleMove = (...args) => {
+    if (sortOrder !== "manual") {
+      setSortOrder("manual");
+      notifications.show({
+        message: t("Sort switched to manual order so your arrangement is kept"),
+      });
+    }
+    return handleMove(...args);
+  };
   const [isDataLoaded, setIsDataLoaded] = useState(false);
   const spaceIdRef = useRef(spaceId);
   spaceIdRef.current = spaceId;
@@ -222,7 +235,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           openIds={openIds}
           selectedId={currentPage?.id}
           renderRow={renderRow}
-          onMove={handleMove}
+          onMove={handleMoveAndKeepOrder}
           onToggle={handleToggle}
           readOnly={readOnly}
           disableDrag={disableDragDrop}

@@ -3,12 +3,14 @@ import { atomWithStorage } from "jotai/utils";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { appendNodeChildren } from "../utils";
 
-export type SortOrder = "alphabetical-asc" | "alphabetical-desc" | "created-newest" | "created-oldest" | "modified-newest" | "modified-oldest";
+export type SortOrder = "manual" | "alphabetical-asc" | "alphabetical-desc" | "created-newest" | "created-oldest" | "modified-newest" | "modified-oldest";
 
 export const treeDataAtom = atom<SpaceTreeNode[]>([]);
 export const selectedPageIdsAtom = atom<Set<string>>(new Set<string>());
 export const selectionModeAtom = atom<boolean>(false);
-export const sortOrderAtom = atomWithStorage<SortOrder>("page-sort-order", "alphabetical-asc");
+// AltWiki: page whose title is being renamed inline in the sidebar.
+export const renamingPageIdAtom = atom<string>(""); // "" = none
+export const sortOrderAtom = atomWithStorage<SortOrder>("page-sort-order", "manual");
 
 // Atom
 export const appendNodeChildrenAtom = atom(

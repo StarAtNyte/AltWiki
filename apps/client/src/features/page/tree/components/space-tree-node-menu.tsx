@@ -10,6 +10,7 @@ import {
   IconDotsVertical,
   IconFileExport,
   IconLink,
+  IconPencil,
   IconStar,
   IconStarFilled,
   IconTrash,
@@ -31,7 +32,10 @@ import {
   useRemoveFavoriteMutation,
 } from "@/features/favorite/queries/favorite-query";
 
-import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import {
+  renamingPageIdAtom,
+  treeDataAtom,
+} from "@/features/page/tree/atoms/tree-data-atom.ts";
 import { treeModel } from "@/features/page/tree/model/tree-model";
 import {
   spaceRoots,
@@ -47,6 +51,7 @@ export interface NodeMenuProps {
 }
 
 export function NodeMenu({ node, canEdit }: NodeMenuProps) {
+  const [, setRenamingPageId] = useAtom(renamingPageIdAtom);
   const { t } = useTranslation();
   const clipboard = useClipboard({ timeout: 500 });
   const { spaceSlug } = useParams();
@@ -193,6 +198,17 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
 
           {canEdit && (
             <>
+              <Menu.Item
+                leftSection={<IconPencil size={16} />}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setRenamingPageId(node.id);
+                }}
+              >
+                {t("Rename")}
+              </Menu.Item>
+
               <Menu.Item
                 leftSection={<IconCopy size={16} />}
                 onClick={(e) => {

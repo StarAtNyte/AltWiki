@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useTranslation } from "react-i18next";
@@ -27,10 +27,12 @@ import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sideb
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 
 import {
+  renamingPageIdAtom,
   selectedPageIdsAtom,
   selectionModeAtom,
   treeDataAtom,
 } from "@/features/page/tree/atoms/tree-data-atom.ts";
+import localEmitter from "@/lib/local-emitter.ts";
 import { treeModel } from "@/features/page/tree/model/tree-model";
 import { useTreeMutation } from "@/features/page/tree/hooks/use-tree-mutation.ts";
 import type { SpaceTreeNode } from "@/features/page/tree/types.ts";
@@ -69,6 +71,65 @@ export function SpaceTreeRow({
   const setSelectedPageIds = useSetAtom(selectedPageIdsAtom);
 
   const canEdit = !readOnly && node.canEdit !== false;
+
+  // AltWiki inline rename (double-click the title or "Rename" in the menu).
+  const [renamingId, setRenamingId] = useAtom(renamingPageIdAtom);
+  const isRenaming = canEdit && renamingId === node.id;
+  const [draftTitle, setDraftTitle] = useState(node.name ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming) {
+      setDraftTitle(node.name ?? "");
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      });
+    }
+  }, [isRenaming]);
+
+  const renameTree = (nodes: SpaceTreeNode[], title: string): SpaceTreeNode[] =>
+    nodes.map((n) =>
+      n.id === node.id
+        ? { ...n, name: title }
+        : n.children?.length
+          ? { ...n, children: renameTree(n.children, title) }
+          : n,
+    );
+
+  const commitRename = async () => {
+    const title = draftTitle.trim();
+    setRenamingId("");
+    if (title === (node.name ?? "").trim()) return;
+    setTreeData((prev) => renameTree(prev, title));
+    try {
+      const page = await updatePageMutation.mutateAsync({
+        pageId: node.id,
+        title,
+      });
+      const event = {
+        operation: "updateOne" as const,
+        spaceId: page.spaceId,
+        entity: ["pages"],
+        id: page.id,
+        payload: {
+          title: page.title,
+          slugId: page.slugId,
+          parentPageId: page.parentPageId,
+          icon: page.icon,
+        },
+      };
+      localEmitter.emit("message", event);
+      emit(event);
+    } catch (err) {
+      setTreeData((prev) => renameTree(prev, node.name ?? ""));
+      console.error("Rename failed", err);
+    }
+  };
+
+  const stopForInput = (e: React.SyntheticEvent) => {
+    e.stopPropagation();
+  };
   const pageUrl = buildPageUrl(spaceSlug, node.slugId, node.name);
 
   const prefetchPage = () => {
@@ -171,7 +232,17 @@ export function SpaceTreeRow({
       style={{ "--tree-level": level } as React.CSSProperties}
       tabIndex={tabIndex}
       {...treeItemProps}
-      onClick={() => {
+      onDoubleClick={(e) => {
+        if (!canEdit || selectionMode) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setRenamingId(node.id);
+      }}
+      onClick={(e) => {
+        if (isRenaming) {
+          e.preventDefault();
+          return;
+        }
         // AltWiki: opening a page also reveals its children (never
         // collapses it); the chevron keeps toggling independently.
         if (!isOpen && hasChildren) {
@@ -224,7 +295,40 @@ export function SpaceTreeRow({
         />
       </div>
 
-      <span className={classes.text}>{getPageTitle(node.name, node.isBase, t)}</span>
+      {isRenaming ? (
+        <input
+          ref={inputRef}
+          className={classes.renameInput}
+          value={draftTitle}
+          aria-label={t("Rename page")}
+          placeholder={t("untitled")}
+          onChange={(e) => setDraftTitle(e.currentTarget.value)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDoubleClick={stopForInput}
+          onMouseDown={stopForInput}
+          onPointerDown={stopForInput}
+          onDragStart={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitRename();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setRenamingId("");
+            }
+          }}
+          onBlur={commitRename}
+        />
+      ) : (
+        <span className={classes.text}>{getPageTitle(node.name, node.isBase, t)}</span>
+      )}
 
       <div className={classes.actions}>
         <NodeMenu node={node} canEdit={canEdit} />
