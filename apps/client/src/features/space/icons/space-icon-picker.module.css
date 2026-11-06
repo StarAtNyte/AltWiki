@@ -6,7 +6,7 @@
 
 .content {
   border-radius: rem(18px) !important;
-  background: light-dark(rgba(255, 255, 255, 0.9), rgba(22, 26, 35, 0.88)) !important;
+  background: light-dark(rgba(253, 252, 250, 0.97), rgba(22, 26, 35, 0.97)) !important;
   /* No blur of its own: it already sits on the blurred overlay. */
   border: 1px solid light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.08));
   box-shadow:

@@ -477,7 +477,7 @@ export class WorkspaceInvitationService {
 
     await this.mailService.sendToQueue({
       to: inviteeEmail,
-      subject: `${invitedByName} invited you to Docmost`,
+      subject: `${invitedByName} invited you to AltWiki`,
       template: emailTemplate,
     });
   }
