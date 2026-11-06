@@ -110,7 +110,7 @@ export class GithubDocsService {
       job.progress = {
         status: 'creating',
         progress: 80,
-        message: 'Creating pages in Docmost...',
+        message: 'Creating pages in AltWiki...',
       };
 
       const pages = await this.docBuilder.createDocPages(

@@ -220,11 +220,11 @@ export default function PublicSpaceDirectoryPage() {
               Powered by{" "}
               <a
                 className={styles.footerBranding}
-                href="https://docmost.com?ref=public-space"
+                href="https://github.com/StarAtNyte/AltWiki"
                 target="_blank"
                 rel="noreferrer"
               >
-                Docmost
+                AltWiki
               </a>
             </div>
           </div>
