@@ -18,38 +18,37 @@ AltWiki keeps everything Docmost does (real-time collaborative editing, spaces, 
 
 ## Features
 
-### Added in AltWiki
-
-- **Alpine-glass UI.** Frosted panels over a landscape photo. Each user picks their own background (four presets, plain, or an uploaded image, with a dim slider). Only that user sees it.
+**Interface**
+- **Alpine-glass UI.** Frosted panels over a landscape photo. Each user picks their own background (four presets, plain, or an uploaded image, with a dim slider); only that user sees it.
 - **Space rail and bento home.** A slim rail with every space, and a home page with recent edits, favourites, "continue reading", quick page creation and a space grid.
 - **Space icons.** Pick an icon and colour from a built-in set, shuffle, or upload an image.
-- **Confluence import.** Import a Confluence XML space export, including attachments, images and video.
-- **GitHub docs generator.** Generate documentation pages from a GitHub repository, written by Gemini (`GEMINI_API_KEY`).
-- **Page tree control.** Rename pages inline in the sidebar, and keep a manual drag-and-drop order (the default) or sort.
-- **Change page owner.** Workspace admins can hand a page to another member.
+- **Search.** Ctrl+K / Cmd+K popup with space, type and title filters, plus full-text search.
+- **Light and dark themes, RTL text and translations into many languages.**
+
+**Writing and editing**
+- **Real-time collaboration** with comments, page history and version compare.
+- **Rich editor:** tables, callouts, code blocks, task lists, embeds, math (KaTeX), footnotes.
+- **Diagrams:** Draw.io, Excalidraw and Mermaid.
+- **Templates** and **presentation mode**.
+
+**Organising pages**
+- **Page tree control.** Rename pages inline in the sidebar; keep a manual drag-and-drop order (the default) or sort by name or date.
 - **Automatic subpage sections.** Parent pages list their child pages.
 - **Bulk page actions.** Select several pages in the sidebar to move or delete them together.
+- **Favourites, notifications and page / space watching.**
+
+**Spaces and access**
+- **Spaces, groups and permissions.**
 - **Open spaces.** Spaces marked open are visible to the whole workspace.
-- **Glass search.** Ctrl+K / Cmd+K search popup with space, type and title filters.
+- **Change page owner.** Workspace and space admins can hand a page to another member.
+- **Public sharing** of pages and spaces.
 
-### From Docmost
-
-- Real-time collaboration
-- Rich editor: tables, callouts, code blocks, task lists, embeds, math (KaTeX), footnotes, RTL text
-- Diagrams: Draw.io, Excalidraw and Mermaid
-- Comments
-- Page history and version compare
-- Presentation mode
-- Spaces, groups and permissions
-- Public sharing of pages and spaces
-- Full-text search
-- Import and export (Markdown, HTML, DOCX and more)
-- Notifications and page / space watching
-- Favourites
-- Templates
-- Integrations: GitHub, Figma and Linear (OAuth, see [Configuration](#configuration))
-- REST API
-- Translations into many languages
+**Import, export and integrations**
+- **Confluence import.** Import a Confluence XML space export, including attachments, images and video.
+- **Import and export** (Markdown, HTML, DOCX and more).
+- **GitHub docs generator.** Generate documentation pages from a GitHub repository, written by Gemini (`GEMINI_API_KEY`).
+- **Integrations:** GitHub, Figma and Linear (OAuth, see [Configuration](#configuration)).
+- **REST API.**
 
 ## Screenshots
 
