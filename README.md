@@ -1,6 +1,6 @@
 # AltWiki
 
-A self-hosted team wiki by Alternative Technology (Nepal), built on [Docmost](https://github.com/docmost/docmost) v0.97.
+A self-hosted team wiki built on [Docmost](https://github.com/docmost/docmost) v0.97.
 
 ![AltWiki home](docs/screenshots/home.webp)
 
